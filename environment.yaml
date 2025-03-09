@@ -1,0 +1,17 @@
+name: kmk
+channels:
+    - conda-forge
+    - defaults
+dependencies:
+    - python=3.11
+    - google-genai
+    - gradio
+    - sqlite
+    - sqlalchemy
+    - pip
+    - pip:
+          - google-api-core
+          - google-auth
+          - requests
+          - beautifulsoup4
+          - python-dotenv
