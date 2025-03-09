@@ -7,6 +7,14 @@ RED = "\033[91;1m"
 RESET = "\033[0m"
 DEBUG = False
 
+
+gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
+
+gist_response = requests.get(gist_url)
+
+evil_text = gist_response.text
+
+
 class Chatbot:
     def __init__(self, client, model):
         self.client = client
@@ -28,8 +36,7 @@ class Chatbot:
     def get_token_count(self, text):
         try:
             token_text = str(
-                self.client.models.count_tokens(
-                    model=self.model.name, contents=text)
+                self.client.models.count_tokens(model=self.model.name, contents=text)
             ).split(" ")
             index = token_text[0].index("=") + 1
             token = int(token_text[0][index:])
@@ -48,8 +55,7 @@ class Chatbot:
         )
 
         while (
-                total_tokens >= self.context_window_limit or len(
-                    self.chat_history) % 2 == 1
+            total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
             self.chat_history = self.chat_history[1:]
@@ -228,51 +234,25 @@ class Chatbot:
         self.chat_history.append(("Gemini", response.text))
 
         current_token_count = self.get_token_count(
-                "\n".join([f"{user}: {message}" for user,
-                          message in self.chat_history])
-            )
+            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+        )
         info = (
-                "Context Window: "
-                + str(current_token_count)
-                + f" / {self.context_window_limit}"
-            )
+            "Context Window: "
+            + str(current_token_count)
+            + f" / {self.context_window_limit}"
+        )
 
         print(f"{RED}{info}{RESET}")
         print(f"{BLUE}{response.text}{RESET}", end="")
-
-    def _text(self, prompt):  # texting function
-        print("prompt:", prompt)
-
-        if self._check_for_exceptions(prompt) == 1:
-            return
-
-        response = self.get_response()
-
-        if response == "":
-            return
-
-        current_token_count = self.get_token_count(
-                "\n".join([f"{user}: {message}" for user,
-                          message in self.chat_history])
-            )
-        info = (
-                "Context Window: "
-                + str(current_token_count)
-                + f" / {self.context_window_limit}"
-            )
-
-        print(f"{RED}{info}{RESET}")
-        print(f"{BLUE}Gemini: {response.text}{RESET}")
 
     def get_response(self):  # api call
         try:
             response = self.client.models.generate_content(
                 model=self.model.name,
-                    contents="\n".join(
-                        [f"{user}: {message}" for user,
-                            message in self.chat_history]
-                    ),
-                )
+                contents="\n".join(
+                    [f"{user}: {message}" for user, message in self.chat_history]
+                ),
+            )
             return response
         except Exception as e:
             if self._fix_exceptions(e) == 1:
