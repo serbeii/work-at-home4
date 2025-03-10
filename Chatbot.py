@@ -1,6 +1,8 @@
 from google import genai
 import time
 import requests
+from pydantic import BaseModel
+import sqlite3
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
@@ -17,6 +19,8 @@ evil_text = gist_response.text
 
 class Chatbot:
     def __init__(self, client, model):
+        self.database = "database/Northwind.db"
+        self.create_tables = []
         self.client = client
         self.model = model
         self.chat_history = []
@@ -26,6 +30,22 @@ class Chatbot:
         self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
+
+    def get_create_tables(self):
+        script_content = open("database/database_script.sql", "r").read()
+        tables = []
+        index1 = script_content.find("CREATE")
+        index2 = -1
+        if index1 != -1:
+            index2 = script_content[index1 + 6 :].find(";") + index1 + 6 + 1
+
+        while index1 != index2 - 1 and index2 != index1 - 1:
+            tables.append(script_content[index1:index2])
+            index1 = script_content[index2:].find("CREATE") + index2
+            if index1 != index2 - 1:
+                index2 = script_content[index1:].find(";") + index1 + 1
+
+        return tables
 
     def _start_timer(self):
         self.start_time = time.time()
@@ -202,21 +222,89 @@ class Chatbot:
                     self._chat("Hello World!")
 
             elif genmode == "query":
-                system_prompt = "prior info"
+                self.chat_history.append(
+                    (
+                        "System",
+                        "process user's request to an sql query, based on the provided tables below",
+                    )
+                )
 
-                self.chat_history.append(("System", system_prompt))
-                prompt = input("Enter your query in natural language\n")
-                self._query()
-                # ...
+                if self.create_tables == []:
+                    self.create_tables = self.get_create_tables()
+
+                self.chat_history.append(("System", "\n".join(self.create_tables)))
+
+                print("Enter your query in natural language")
+
+                while True:
+                    prompt = input()
+
+                    if prompt == "q":
+                        break
+                    self._query(prompt)
 
             else:
                 continue
 
-    def _query_database(self, query):
-        pass
+    def _query_database(self, query, try_count):
+        conn = sqlite3.connect(self.database)
+        cursor = conn.cursor()
+
+        index1 = query.find("```sql")
+        index2 = query[index1 + 6 :].find("```") + index1 + 6
+
+        if index1 != -1 and index2 != -1:
+            query1 = query[index1 + 6 : index2]
+        else:
+            print("Can not query the database based on the given prompt")
+            return
+        try:
+            cursor.execute(query1)
+
+        except Exception as e:
+            if try_count == 3:
+                print("Can not query the database based on the given prompt")
+                return
+            self._query(
+                "you have made this error: {e} \n provide the correct query",
+                try_count + 1,
+            )
+            return
+
+        # Fetch all results
+        results = cursor.fetchall()
+
+        # Close the connection
+        conn.close()
+
+        for results1 in results:
+            print(results1)
 
     def _query(self, prompt):
-        pass
+        if self._check_for_exceptions(prompt) == 1:
+            return
+
+        self.chat_history.append(("User", prompt))
+
+        response = self.get_response()
+
+        if response == "":
+            self.chat_history.pop()
+            return
+
+        self.chat_history.append(("Gemini", response.text))
+
+        current_token_count = self.get_token_count(
+            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+        )
+        info = (
+            "Context Window: "
+            + str(current_token_count)
+            + f" / {self.context_window_limit}"
+        )
+
+        print(f"{RED}{info}{RESET}")
+        self._query_database(response.text, 0)
 
     def _chat(self, prompt):  # chatting function
 
