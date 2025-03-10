@@ -234,9 +234,14 @@ class Chatbot:
 
                 self.chat_history.append(("System", "\n".join(self.create_tables)))
 
-                prompt = input("Enter your query in natural language\n")
-                self._query(prompt)
-                # ...
+                print("Enter your query in natural language")
+
+                while True:
+                    prompt = input()
+
+                    if prompt == "q":
+                        break
+                    self._query(prompt)
 
             else:
                 continue
@@ -272,7 +277,8 @@ class Chatbot:
         # Close the connection
         conn.close()
 
-        print(results)
+        for results1 in results:
+            print(results1)
 
     def _query(self, prompt):
         if self._check_for_exceptions(prompt) == 1:
