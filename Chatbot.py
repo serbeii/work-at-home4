@@ -45,7 +45,6 @@ class Chatbot:
             if index1 != index2 - 1:
                 index2 = script_content[index1:].find(";") + index1 + 1
 
-        print(tables)
         return tables
 
     def _start_timer(self):
@@ -242,21 +241,29 @@ class Chatbot:
             else:
                 continue
 
-    def _query_database(self, query):
+    def _query_database(self, query, try_count):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
 
         index1 = query.find("```sql")
         index2 = query[index1 + 6 :].find("```") + index1 + 6
-        print(index1, index2)
+
         if index1 != -1 and index2 != -1:
             query1 = query[index1 + 6 : index2]
-
+        else:
+            print("Can not query the database based on the given prompt")
+            return
         try:
             cursor.execute(query1)
 
         except Exception as e:
-            self._query("you have made this error: {e} \n provide the correct query")
+            if try_count == 3:
+                print("Can not query the database based on the given prompt")
+                return
+            self._query(
+                "you have made this error: {e} \n provide the correct query",
+                try_count + 1,
+            )
             return
 
         # Fetch all results
@@ -291,7 +298,7 @@ class Chatbot:
         )
 
         print(f"{RED}{info}{RESET}")
-        self._query_database(response.text)
+        self._query_database(response.text, 0)
 
     def _chat(self, prompt):  # chatting function
 
