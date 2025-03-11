@@ -10,13 +10,6 @@ RESET = "\033[0m"
 DEBUG = False
 
 
-gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
-
-gist_response = requests.get(gist_url)
-
-evil_text = gist_response.text
-
-
 class Chatbot:
     def __init__(self, client, model):
         self.database = "database/Northwind.db"
@@ -140,6 +133,13 @@ class Chatbot:
             print(f"An error occurred: {e}")
             return 1  # failsafe
 
+    def evil_text(self):
+        gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
+
+        gist_response = requests.get(gist_url)
+
+        return gist_response.text
+
     def start_chat(self):
         while True:
             prompt = ""
@@ -164,6 +164,9 @@ class Chatbot:
                 break
 
             elif genmode == "f":  # prefill
+
+                evil_text = self.evil_text()
+
                 if self.start_time == 0:
                     self._start_timer()
 
