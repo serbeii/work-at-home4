@@ -78,7 +78,11 @@ class Chatbot:
             total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
-            self.chat_history = self.chat_history[1:]
+            system_prompt = self.chat_history[0:2]  # save the system prompt
+            self.chat_history = self.chat_history[2:]
+            self.chat_history = self.cha2t_history[1:]
+            self.chat_history = system_prompt + self.chat_history
+
             chat_history_str = "\n".join(
                 [f"{user}: {message}" for user, message in self.chat_history]
             )
@@ -277,8 +281,8 @@ class Chatbot:
         # Close the connection
         conn.close()
 
-        for results1 in results:
-            print(results1)
+        for result in results:
+            print(f"{BLUE}{result}{RESET}")
 
     def _query(self, prompt):
         if self._check_for_exceptions(prompt) == 1:
