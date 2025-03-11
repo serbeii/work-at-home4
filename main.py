@@ -5,16 +5,6 @@ from dotenv import load_dotenv
 import os
 from Chatbot import Chatbot
 
-BLUE = "\033[94;1m"
-RED = "\033[91;1m"
-RESET = "\033[0m"
-DEBUG = False
-
-gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
-
-gist_response = requests.get(gist_url)
-
-evil_text = gist_response.text
 
 def start_app(chatbot):
     chatbot.start_chat()
