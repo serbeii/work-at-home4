@@ -12,3 +12,13 @@ Leaving the environment
 ```
 conda deactivate
 ```
+
+To run gradio in hotswap mode
+```
+gradio main.py
+```
+
+If gradio does not work update with
+```
+pip install --upgrade gradio
+```
