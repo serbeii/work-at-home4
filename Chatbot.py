@@ -18,11 +18,12 @@ class Chatbot:
         self.model = model
         self.chat_history = []
         self.chat_log = []
-        self.context_window_limit = model.input_token_limit + model.output_token_limit
-        self.input_token_limit = model.input_token_limit
-        self.output_token_limit = model.output_token_limit
+        #self.context_window_limit = model.input_token_limit + model.output_token_limit
+        #self.input_token_limit = model.input_token_limit
+        #self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
+        self.chat = client.chats.create(model=model)
 
     def get_create_tables(self):
         script_content = open("database/database_script.sql", "r").read()
@@ -30,7 +31,7 @@ class Chatbot:
         index1 = script_content.find("CREATE")
         index2 = -1
         if index1 != -1:
-            index2 = script_content[index1 + 6 :].find(";") + index1 + 6 + 1
+            index2 = script_content[index1 + 6:].find(";") + index1 + 6 + 1
 
         while index1 != index2 - 1 and index2 != index1 - 1:
             tables.append(script_content[index1:index2])
@@ -49,7 +50,8 @@ class Chatbot:
     def get_token_count(self, text):
         try:
             token_text = str(
-                self.client.models.count_tokens(model=self.model.name, contents=text)
+                self.client.models.count_tokens(
+                    model=self.model.name, contents=text)
             ).split(" ")
             index = token_text[0].index("=") + 1
             token = int(token_text[0][index:])
@@ -68,7 +70,8 @@ class Chatbot:
         )
 
         while (
-            total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
+            total_tokens >= self.context_window_limit or len(
+                self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
             system_prompt = self.chat_history[0:2]  # save the system prompt
@@ -239,7 +242,8 @@ class Chatbot:
                 if self.create_tables == []:
                     self.create_tables = self.get_create_tables()
 
-                self.chat_history.append(("System", "\n".join(self.create_tables)))
+                self.chat_history.append(
+                    ("System", "\n".join(self.create_tables)))
 
                 print("Enter your query in natural language")
 
@@ -258,10 +262,10 @@ class Chatbot:
         cursor = conn.cursor()
 
         index1 = query.find("```sql")
-        index2 = query[index1 + 6 :].find("```") + index1 + 6
+        index2 = query[index1 + 6:].find("```") + index1 + 6
 
         if index1 != -1 and index2 != -1:
-            query1 = query[index1 + 6 : index2]
+            query1 = query[index1 + 6: index2]
         else:
             print("Can not query the database based on the given prompt")
             return
@@ -302,7 +306,8 @@ class Chatbot:
         self.chat_history.append(("Gemini", response.text))
 
         current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+            "\n".join([f"{user}: {message}" for user,
+                      message in self.chat_history])
         )
         info = (
             "Context Window: "
@@ -329,7 +334,8 @@ class Chatbot:
         self.chat_history.append(("Gemini", response.text))
 
         current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+            "\n".join([f"{user}: {message}" for user,
+                      message in self.chat_history])
         )
         info = (
             "Context Window: "
@@ -354,3 +360,11 @@ class Chatbot:
                 return ""
 
             return self.get_response()
+
+    def chat_prompt(self, message):
+        try:
+            response = self.chat.send_message(message)
+            return(response.text)
+        except Exception as e:
+            if self._fix_exceptions(e) == 1:
+                return ""
