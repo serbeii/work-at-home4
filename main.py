@@ -3,11 +3,16 @@ import time
 import requests
 from dotenv import load_dotenv
 import os
+import gradio as gr
 from Chatbot import Chatbot
 
 
 def start_app(chatbot):
     chatbot.start_chat()
+
+
+def test(message, history):
+    return "Hello"
 
 
 if __name__ == "__main__":
@@ -27,5 +32,8 @@ if __name__ == "__main__":
             break
 
     # end initialization
-    chatbot = Chatbot(client, model)
-    start_app(chatbot)
+    demo = gr.ChatInterface(test, type="messages",
+                            title="work@home4", description="Lorem Ipsum Dolor")
+    demo.launch()
+    # chatbot = Chatbot(client, model)
+    # start_app(chatbot)
