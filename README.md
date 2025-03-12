@@ -1,6 +1,6 @@
 Creating the environment
 ``` 
-conda env create -f environment.yml
+conda env create -f environment.yaml
 ```
 
 Changing to the environment

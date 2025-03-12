@@ -3,30 +3,33 @@ import time
 import requests
 from dotenv import load_dotenv
 import os
+import gradio as gr
 from Chatbot import Chatbot
 
-BLUE = "\033[94;1m"
-RED = "\033[91;1m"
-RESET = "\033[0m"
-DEBUG = False
-
-gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
-
-gist_response = requests.get(gist_url)
-
-evil_text = gist_response.text
 
 def start_app(chatbot):
     chatbot.start_chat()
 
 
+load_dotenv()
+API_KEY = os.getenv("GOOGLE_API_KEY")
+client = genai.Client(api_key=API_KEY)
+model_name = "gemini-2.0-flash-lite"
+chatbot = Chatbot(client, model_name)
+
+def test(message, history):
+    global chatbot
+    result = chatbot.chat_prompt(message) 
+    return result
+
+
 if __name__ == "__main__":
     # start initialization
-    load_dotenv()
-    API_KEY = os.getenv("GOOGLE_API_KEY")
-    client = genai.Client(api_key=API_KEY)
+    #load_dotenv()
+    #API_KEY = os.getenv("GOOGLE_API_KEY")
+    #client = genai.Client(api_key=API_KEY)
 
-    model_name = "gemini-2.0-flash"
+    model_name = "gemini-2.0-flash-lite"
 
     models_list = client.models.list(config={"page_size": 5})
     model = None
@@ -36,6 +39,9 @@ if __name__ == "__main__":
             model = model1
             break
 
-    # end initialization
     chatbot = Chatbot(client, model)
-    start_app(chatbot)
+    # end initialization
+    demo = gr.ChatInterface(test, type="messages",
+                            title="work@home4", description="Lorem Ipsum Dolor")
+    demo.launch()
+    # start_app(chatbot)

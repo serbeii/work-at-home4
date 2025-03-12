@@ -10,13 +10,6 @@ RESET = "\033[0m"
 DEBUG = False
 
 
-gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
-
-gist_response = requests.get(gist_url)
-
-evil_text = gist_response.text
-
-
 class Chatbot:
     def __init__(self, client, model):
         self.database = "database/Northwind.db"
@@ -25,11 +18,12 @@ class Chatbot:
         self.model = model
         self.chat_history = []
         self.chat_log = []
-        self.context_window_limit = model.input_token_limit + model.output_token_limit
-        self.input_token_limit = model.input_token_limit
-        self.output_token_limit = model.output_token_limit
+        #self.context_window_limit = model.input_token_limit + model.output_token_limit
+        #self.input_token_limit = model.input_token_limit
+        #self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
+        self.chat = client.chats.create(model=model)
 
     def get_create_tables(self):
         script_content = open("database/database_script.sql", "r").read()
@@ -37,7 +31,7 @@ class Chatbot:
         index1 = script_content.find("CREATE")
         index2 = -1
         if index1 != -1:
-            index2 = script_content[index1 + 6 :].find(";") + index1 + 6 + 1
+            index2 = script_content[index1 + 6:].find(";") + index1 + 6 + 1
 
         while index1 != index2 - 1 and index2 != index1 - 1:
             tables.append(script_content[index1:index2])
@@ -56,7 +50,8 @@ class Chatbot:
     def get_token_count(self, text):
         try:
             token_text = str(
-                self.client.models.count_tokens(model=self.model.name, contents=text)
+                self.client.models.count_tokens(
+                    model=self.model.name, contents=text)
             ).split(" ")
             index = token_text[0].index("=") + 1
             token = int(token_text[0][index:])
@@ -75,10 +70,15 @@ class Chatbot:
         )
 
         while (
-            total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
+            total_tokens >= self.context_window_limit or len(
+                self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
-            self.chat_history = self.chat_history[1:]
+            system_prompt = self.chat_history[0:2]  # save the system prompt
+            self.chat_history = self.chat_history[2:]
+            self.chat_history = self.cha2t_history[1:]
+            self.chat_history = system_prompt + self.chat_history
+
             chat_history_str = "\n".join(
                 [f"{user}: {message}" for user, message in self.chat_history]
             )
@@ -136,6 +136,13 @@ class Chatbot:
             print(f"An error occurred: {e}")
             return 1  # failsafe
 
+    def evil_text(self):
+        gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
+
+        gist_response = requests.get(gist_url)
+
+        return gist_response.text
+
     def start_chat(self):
         while True:
             prompt = ""
@@ -160,6 +167,9 @@ class Chatbot:
                 break
 
             elif genmode == "f":  # prefill
+
+                evil_text = self.evil_text()
+
                 if self.start_time == 0:
                     self._start_timer()
 
@@ -232,7 +242,8 @@ class Chatbot:
                 if self.create_tables == []:
                     self.create_tables = self.get_create_tables()
 
-                self.chat_history.append(("System", "\n".join(self.create_tables)))
+                self.chat_history.append(
+                    ("System", "\n".join(self.create_tables)))
 
                 print("Enter your query in natural language")
 
@@ -251,10 +262,10 @@ class Chatbot:
         cursor = conn.cursor()
 
         index1 = query.find("```sql")
-        index2 = query[index1 + 6 :].find("```") + index1 + 6
+        index2 = query[index1 + 6:].find("```") + index1 + 6
 
         if index1 != -1 and index2 != -1:
-            query1 = query[index1 + 6 : index2]
+            query1 = query[index1 + 6: index2]
         else:
             print("Can not query the database based on the given prompt")
             return
@@ -277,8 +288,8 @@ class Chatbot:
         # Close the connection
         conn.close()
 
-        for results1 in results:
-            print(results1)
+        for result in results:
+            print(f"{BLUE}{result}{RESET}")
 
     def _query(self, prompt):
         if self._check_for_exceptions(prompt) == 1:
@@ -295,7 +306,8 @@ class Chatbot:
         self.chat_history.append(("Gemini", response.text))
 
         current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+            "\n".join([f"{user}: {message}" for user,
+                      message in self.chat_history])
         )
         info = (
             "Context Window: "
@@ -322,7 +334,8 @@ class Chatbot:
         self.chat_history.append(("Gemini", response.text))
 
         current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+            "\n".join([f"{user}: {message}" for user,
+                      message in self.chat_history])
         )
         info = (
             "Context Window: "
@@ -347,3 +360,11 @@ class Chatbot:
                 return ""
 
             return self.get_response()
+
+    def chat_prompt(self, message):
+        try:
+            response = self.chat.send_message(message)
+            return(response.text)
+        except Exception as e:
+            if self._fix_exceptions(e) == 1:
+                return ""
