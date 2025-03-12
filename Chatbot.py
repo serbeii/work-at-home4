@@ -18,9 +18,9 @@ class Chatbot:
         self.model = model
         self.chat_history = []
         self.chat_log = []
-        #self.context_window_limit = model.input_token_limit + model.output_token_limit
-        #self.input_token_limit = model.input_token_limit
-        #self.output_token_limit = model.output_token_limit
+        # self.context_window_limit = model.input_token_limit + model.output_token_limit
+        # self.input_token_limit = model.input_token_limit
+        # self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
         self.chat = client.chats.create(model=model)
@@ -136,127 +136,6 @@ class Chatbot:
             print(f"An error occurred: {e}")
             return 1  # failsafe
 
-    def evil_text(self):
-        gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
-
-        gist_response = requests.get(gist_url)
-
-        return gist_response.text
-
-    def start_chat(self):
-        while True:
-            prompt = ""
-            genmode = ""
-
-            genmode = input(
-                """Please choose one of the following options:
-            *Enter 't' to enter a text prompt.
-            *Enter 'c' to start a chat.
-            *Enter 'f' to prefill the history.
-            *Enter 'p' to print chat history.
-            *Enter 'b' to break rpm limit
-            *Enter 'q' to quit.
-            *Enter 'query' to query the sql lite database, json format.
-            Option: """
-            )
-            self.chat_log += self.chat_history
-            self.chat_history = []
-
-            if genmode == "q":  # quit
-                print("Exiting the application.")
-                break
-
-            elif genmode == "f":  # prefill
-
-                evil_text = self.evil_text()
-
-                if self.start_time == 0:
-                    self._start_timer()
-
-                prompt = evil_text
-
-                while True:
-                    self._chat(prompt)
-
-                    prefill_again = input(
-                        "would you like to fill the history more ? y/n \n"
-                    )
-                    if prefill_again == "y":
-                        prompt = evil_text
-                        continue
-
-                    if prompt == "q":
-                        break
-
-                    prompt = input()
-
-            elif genmode == "p":  # print chat log
-                print("\nChat History:\n")
-                for user, message in self.chat_log:
-                    print(f"{user}: {message}")
-                print("\n")
-
-            elif genmode == "t":  # enter text
-
-                prompt = input("Enter your text: \n")
-
-                if prompt == "q":
-                    continue
-
-                if self.start_time == 0:
-                    self._start_timer()
-
-                self._chat(prompt)
-
-            elif genmode == "c":  # chat
-
-                if self.start_time == 0:
-                    self._start_timer()
-
-                prompt = "Hello"
-
-                while True:
-                    self._chat(prompt)
-                    prompt = input()
-
-                    if prompt == "q":
-                        genmode = ""
-                        break
-
-            elif genmode == "b":  # break limits
-
-                if self.start_time == 0:
-                    self._start_timer()
-
-                while True:
-                    self._chat("Hello World!")
-
-            elif genmode == "query":
-                self.chat_history.append(
-                    (
-                        "System",
-                        "process user's request to an sql query, based on the provided tables below",
-                    )
-                )
-
-                if self.create_tables == []:
-                    self.create_tables = self.get_create_tables()
-
-                self.chat_history.append(
-                    ("System", "\n".join(self.create_tables)))
-
-                print("Enter your query in natural language")
-
-                while True:
-                    prompt = input()
-
-                    if prompt == "q":
-                        break
-                    self._query(prompt)
-
-            else:
-                continue
-
     def _query_database(self, query, try_count):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
@@ -318,53 +197,10 @@ class Chatbot:
         print(f"{RED}{info}{RESET}")
         self._query_database(response.text, 0)
 
-    def _chat(self, prompt):  # chatting function
-
-        if self._check_for_exceptions(prompt) == 1:
-            return
-
-        self.chat_history.append(("User", prompt))
-
-        response = self.get_response()
-
-        if response == "":
-            self.chat_history.pop()
-            return
-
-        self.chat_history.append(("Gemini", response.text))
-
-        current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user,
-                      message in self.chat_history])
-        )
-        info = (
-            "Context Window: "
-            + str(current_token_count)
-            + f" / {self.context_window_limit}"
-        )
-
-        print(f"{RED}{info}{RESET}")
-        print(f"{BLUE}{response.text}{RESET}", end="")
-
-    def get_response(self):  # api call
-        try:
-            response = self.client.models.generate_content(
-                model=self.model.name,
-                contents="\n".join(
-                    [f"{user}: {message}" for user, message in self.chat_history]
-                ),
-            )
-            return response
-        except Exception as e:
-            if self._fix_exceptions(e) == 1:
-                return ""
-
-            return self.get_response()
-
     def chat_prompt(self, message):
         try:
             response = self.chat.send_message(message)
-            return(response.text)
+            return (response.text)
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 return ""
