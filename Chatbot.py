@@ -24,6 +24,10 @@ class Chatbot:
         self.start_time = 0
         self.waiting_time = 0
         self.chat = client.chats.create(model=model)
+        self.system_prompt = (
+            "process user's request to an sql query based on the provided database tables:\n"
+            + "\n".join(self.get_create_tables())
+        )
 
     def get_create_tables(self):
         script_content = open("database/database_script.sql", "r").read()
@@ -194,12 +198,12 @@ class Chatbot:
         print(f"{RED}{info}{RESET}")
         self._query_database(response.text, 0)
 
-    def chat_prompt(self, message):
+    def chat_prompt(self, prompt):
         try:
-            response = self.chat.send_message(message)
+            response = self.chat.send_message(prompt)
             return response.text
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 return ""
 
-            return self.chat_prompt(message)
+            return self.chat_prompt(prompt)
