@@ -78,10 +78,8 @@ class Chatbot:
             total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
-            system_prompt = self.chat_history[0:2]  # save the system prompt
-            self.chat_history = self.chat_history[2:]
-            self.chat_history = self.cha2t_history[1:]
-            self.chat_history = system_prompt + self.chat_history
+
+            self.chat_history = self.chat_history[1:]  # shrink from the beginning
 
             chat_history_str = "\n".join(
                 [f"{user}: {message}" for user, message in self.chat_history]
@@ -123,6 +121,10 @@ class Chatbot:
 
     def _fix_exceptions(self, e):  # fixes unforseen exceptions
 
+        if not hasattr(e, "code"):
+            print(f"An error occurred: {e}")
+            return 1  # failsafe
+
         if self.waiting_time == 0:
             current_time = int(self._get_time() % 60)
             self.waiting_time = current_time
@@ -135,7 +137,7 @@ class Chatbot:
                 f"Resource exhausted, please wait {60 - current_time} seconds to continue"
             )
             time.sleep(60 - current_time)
-            return 0
+            return 0  # retry the function
         else:
             print(f"An error occurred: {e}")
             return 1  # failsafe
