@@ -3,6 +3,7 @@ import time
 import requests
 from pydantic import BaseModel
 import sqlite3
+import gradio as gr
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
@@ -18,15 +19,17 @@ class Chatbot:
         self.model = model
         self.chat_history = []
         self.chat_log = []
-        self.context_window_limit = model.input_token_limit + model.output_token_limit
-        self.input_token_limit = model.input_token_limit
-        self.output_token_limit = model.output_token_limit
-        self.start_time = 0
-        self.waiting_time = 0
         self.query_system_instruction = (
             "process user's request to an sql query based on the provided database tables. Later, provide a schema that starts with ```json, based on the query and the database tables:\n"
             + "\n".join(self.get_create_tables())
         )
+        self.input_token_limit = model.input_token_limit - len(
+            self.query_system_instruction
+        )
+        self.output_token_limit = model.output_token_limit
+        self.context_window_limit = model.input_token_limit + model.output_token_limit
+        self.start_time = 0
+        self.waiting_time = 0
 
     def get_create_tables(self):
         script_content = open("database/database_script.sql", "r").read()
@@ -242,6 +245,9 @@ class Chatbot:
             else:
                 continue
 
+    def start_query(self, prompt):
+        return self._query(prompt)
+
     def _query_database(self, query, try_count):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
@@ -303,12 +309,13 @@ class Chatbot:
         schema = self._get_schema(response.text)
         if schema == "":
             return
-        query = self._query_database(response.text, 0)
-        if query == "":
+        query_output = self._query_database(response.text, 0)
+        if query_output == "":
             return
 
-        json_query = self.get_JSON_response(query, schema)
-        print(f"{RED}{json_query.text}{RESET}")
+        json_query = self.get_JSON_response(query_output, schema)
+        # print(f"{RED}{json_query.text}{RESET}")
+        return info + "\n" + json_query.text
 
     def _chat(self, prompt):  # chatting function
 
@@ -355,21 +362,23 @@ class Chatbot:
 
             return self.get_response()
 
-    def get_JSON_response(self, query, schema):
+    def get_JSON_response(self, query_output, schema):
         try:
+
             response = self.client.models.generate_content(
                 model=self.model.name,
-                contents="\n".join(
-                    [f"{user}: {message}" for user, message in self.chat_history]
+                contents=(
+                    "construct the json file of the query_output based on the schema"
                 ),
                 config={
-                    "system_instruction": "use this schema: " + schema,
+                    "system_instruction": f"use this query_output: {query_output} and this schema: {schema}",
                     "response_mime_type": "application/json",
                 },
             )
             return response
         except Exception as e:
             if self._fix_exceptions(e) == 1:
+                print("Can not get the JSON response", e)
                 return ""
 
             return self.get_JSON_response()

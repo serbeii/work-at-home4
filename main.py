@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 import os
 from Chatbot import Chatbot
+import gradio as gr
 
 
 def start_app(chatbot):
@@ -29,4 +30,10 @@ if __name__ == "__main__":
 
     # end initialization
     chatbot = Chatbot(client, model, database)
-    start_app(chatbot)
+    # start_app(chatbot)
+
+    def respond(text):
+        return chatbot.start_query(text)
+
+    iface = gr.Interface(fn=respond, inputs="text", outputs="text")
+    iface.launch()

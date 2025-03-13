@@ -19,11 +19,10 @@ response = client.models.generate_content(
     contents="List a few popular cookie recipes. Be sure to include the amounts of ingredients.",
     config={
         "response_mime_type": "application/json",
-        # "response_schema": list[Recipe],
     },
 )
 # Use the response as a JSON string.
-pydantic_response = model.dump.json()
+pydantic_response = r
 print(response.text)
 
 # Use instantiated objects.
