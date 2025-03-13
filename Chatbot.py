@@ -1,9 +1,9 @@
 from google import genai
 import time
 import requests
-from pydantic import BaseModel
 import sqlite3
 import gradio as gr
+import json
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
@@ -20,7 +20,7 @@ class Chatbot:
         self.chat_history = []
         self.chat_log = []
         self.query_system_instruction = (
-            "process user's request to an sql query based on the provided database tables. Later, provide a schema that starts with ```json, based on the query and the database tables:\n"
+            "If user prompt is relating to querying the database, process user's request to an sql query based on the provided database table. If not, return empty. Later, provide a json schema based on the query and the database tables. Save the json as query = String and schema = dict. Here are the database's create tables:\n"
             + "\n".join(self.get_create_tables())
         )
         self.input_token_limit = model.input_token_limit - len(
@@ -240,33 +240,25 @@ class Chatbot:
 
                     if prompt == "q":
                         break
-                    self._query(prompt)
+                    self._query(prompt, 0)
 
             else:
                 continue
 
     def start_query(self, prompt):
-        return self._query(prompt)
+        return self._query(prompt, 0)
 
     def _query_database(self, query, try_count):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
-
-        index1 = query.find("```sql")
-        index2 = query[index1 + 6 :].find("```") + index1 + 6
-
-        if index1 != -1 and index2 != -1:
-            query1 = query[index1 + 6 : index2]
-        else:
-            print("Can not query the database based on the given prompt")
-            return ""
         try:
-            cursor.execute(query1)
+            cursor.execute(query)
 
         except Exception as e:
             if try_count == 3:
                 print("Can not query the database based on the given prompt")
-                return
+                return ""
+            self.chat_history.pop()
             self._query(
                 "you have made this error: {e} \n provide the correct query",
                 try_count + 1,
@@ -281,19 +273,19 @@ class Chatbot:
 
         return results
 
-    def _query(self, prompt):
+    def _query(self, prompt, try_count=0):
         if self._check_for_exceptions(prompt) == 1:
             return
 
         self.chat_history.append(("User", prompt))
 
-        response = self.get_response(self.query_system_instruction)
+        response = self.get_json_response(self.query_system_instruction)
 
-        if response == "":
+        if response == {}:
             self.chat_history.pop()
             return
 
-        self.chat_history.append(("Gemini", response.text))
+        self.chat_history.append(("Gemini", json.dumps(response)))
 
         current_token_count = self.get_token_count(
             "\n".join([f"{user}: {message}" for user, message in self.chat_history])
@@ -306,16 +298,18 @@ class Chatbot:
 
         print(f"{RED}{info}{RESET}")
 
-        schema = self._get_schema(response.text)
-        if schema == "":
-            return
-        query_output = self._query_database(response.text, 0)
+        schema = response["schema"]
+        query = response["query"]
+        if schema == {} or query == "":
+            return "enter a valid natural query please!"
+
+        query_output = self._query_database(str(query), try_count)
         if query_output == "":
             return
 
-        json_query = self.get_JSON_response(query_output, schema)
+        json_query = self.get_query_JSON_response(query_output, schema)
         # print(f"{RED}{json_query.text}{RESET}")
-        return info + "\n" + json_query.text
+        return info + "\n" + json.dumps(json_query, indent=4)
 
     def _chat(self, prompt):  # chatting function
 
@@ -344,7 +338,7 @@ class Chatbot:
         print(f"{RED}{info}{RESET}")
         print(f"{BLUE}{response.text}{RESET}", end="")
 
-    def get_response(self, system_instruction):  # api call
+    def get_json_response(self, system_instruction):  # api call
         try:
             response = self.client.models.generate_content(
                 model=self.model.name,
@@ -353,35 +347,40 @@ class Chatbot:
                 ),
                 config={
                     "system_instruction": system_instruction,
-                },
-            )
-            return response
-        except Exception as e:
-            if self._fix_exceptions(e) == 1:
-                return ""
-
-            return self.get_response()
-
-    def get_JSON_response(self, query_output, schema):
-        try:
-
-            response = self.client.models.generate_content(
-                model=self.model.name,
-                contents=(
-                    "construct the json file of the query_output based on the schema"
-                ),
-                config={
-                    "system_instruction": f"use this query_output: {query_output} and this schema: {schema}",
                     "response_mime_type": "application/json",
                 },
             )
-            return response
+
+            return json.loads(response.text)
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 print("Can not get the JSON response", e)
-                return ""
+                return {}
 
-            return self.get_JSON_response()
+            return self.get_response()
+
+    def get_query_JSON_response(self, query_output, schema):
+        try:
+            response = self.client.models.generate_content(
+                model=self.model.name,
+                contents=(
+                    f"construct the json file of the query_output: {query_output}"
+                ),
+                config={
+                    "system_instruction": f"use this schema: {schema}",
+                    "response_mime_type": "application/json",
+                },
+            )
+
+            return json.loads(response.text)
+        except Exception as e:
+            if self._fix_exceptions(e) == 1:
+                print("Can not get the JSON response", e)
+                return {}
+
+            return self.get_query_JSON_response()
+
+    import json
 
     def _get_schema(self, output):
         index1 = output.find("```json")
@@ -393,4 +392,4 @@ class Chatbot:
             print("Can not get the schema")
             return ""
 
-        return output
+        return json.loads(output)

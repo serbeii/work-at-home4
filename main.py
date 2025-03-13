@@ -11,6 +11,10 @@ def start_app(chatbot):
     chatbot.start_chat()
 
 
+def respond(text):
+    return chatbot.start_query(text)
+
+
 if __name__ == "__main__":
     # start initialization
     load_dotenv()
@@ -31,9 +35,6 @@ if __name__ == "__main__":
     # end initialization
     chatbot = Chatbot(client, model, database)
     # start_app(chatbot)
-
-    def respond(text):
-        return chatbot.start_query(text)
 
     iface = gr.Interface(fn=respond, inputs="text", outputs="text")
     iface.launch()
