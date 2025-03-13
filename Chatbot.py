@@ -1,21 +1,23 @@
 from google import genai
+from google.genai import types
 import time
 import requests
 from pydantic import BaseModel
 import sqlite3
+from dotenv import load_dotenv
+import os
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
 RESET = "\033[0m"
 DEBUG = False
 
-
 class Chatbot:
-    def __init__(self, client, model):
+    def __init__(self, client, model_name):
         self.database = "database/Northwind.db"
         self.create_tables = []
         self.client = client
-        self.model = model
+        self.model_name = model_name
         self.chat_history = []
         self.chat_log = []
         # self.context_window_limit = model.input_token_limit + model.output_token_limit
@@ -23,7 +25,8 @@ class Chatbot:
         # self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
-        self.chat = client.chats.create(model=model)
+        self.chat = None
+        self.start_chat()
 
     def get_create_tables(self):
         script_content = open("database/database_script.sql", "r").read()
@@ -197,6 +200,53 @@ class Chatbot:
         print(f"{RED}{info}{RESET}")
         self._query_database(response.text, 0)
 
+    def start_chat(self):
+            # Create configuration with system instruction
+            generate_content_config = types.GenerateContentConfig(
+                temperature=0.7,
+                top_p=0.95,
+                top_k=40,
+                response_mime_type="application/json",
+                system_instruction=[
+                    types.Part.from_text(
+                        text="""You are a LLM who understands and can respond in Turkish or English based on user input. 
+                                I am the user, a company manager who's working with a SQLite database. 
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL.
+                                statement, execute that statement on the SQLite database, and return the results. The format of your response is structured JSON. 
+                                Your responses MUST be in JSON format according to the schema:
+                                {
+                                    "name": "string",
+                                    "type": "string",
+                                    "description": "string"
+                                 }
+                            """
+                    ),
+                ],
+                response_schema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": ""
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": ""
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": ""
+                        }
+                    },
+                    # "required": ["instrument_name", "instrument_type"]
+                }
+            )
+            
+            # Create a chat session with the config
+            self.chat = self.client.chats.create(
+                model=self.model_name,
+                config=generate_content_config
+            )
     def chat_prompt(self, message):
         try:
             response = self.chat.send_message(message)
