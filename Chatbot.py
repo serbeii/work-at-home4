@@ -11,21 +11,20 @@ DEBUG = False
 
 
 class Chatbot:
-    def __init__(self, client, model):
-        self.database = "database/Northwind.db"
+    def __init__(self, client, model, database):
+        self.database = database
         self.create_tables = []
         self.client = client
         self.model = model
         self.chat_history = []
         self.chat_log = []
-        # self.context_window_limit = model.input_token_limit + model.output_token_limit
-        # self.input_token_limit = model.input_token_limit
-        # self.output_token_limit = model.output_token_limit
+        self.context_window_limit = model.input_token_limit + model.output_token_limit
+        self.input_token_limit = model.input_token_limit
+        self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
-        self.chat = client.chats.create(model=model)
-        self.system_prompt = (
-            "process user's request to an sql query based on the provided database tables:\n"
+        self.query_system_instruction = (
+            "process user's request to an sql query based on the provided database tables. Later, provide a schema that starts with ```json, based on the query and the database tables:\n"
             + "\n".join(self.get_create_tables())
         )
 
@@ -76,11 +75,7 @@ class Chatbot:
             total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
         ):  # shrink until context window < limit or a chat is cut in half
             # shrink from the beginning
-            system_prompt = self.chat_history[0:2]  # save the system prompt
-            self.chat_history = self.chat_history[2:]
-            self.chat_history = self.cha2t_history[1:]
-            self.chat_history = system_prompt + self.chat_history
-
+            self.chat_history = self.chat_history[1:]
             chat_history_str = "\n".join(
                 [f"{user}: {message}" for user, message in self.chat_history]
             )
@@ -121,6 +116,9 @@ class Chatbot:
 
     def _fix_exceptions(self, e):  # fixes unforseen exceptions
 
+        if not hasattr(e, "code"):
+            print(f"An error occurred: {e}")
+            return 1  # failsafe
         if self.waiting_time == 0:
             current_time = int(self._get_time() % 60)
             self.waiting_time = current_time
@@ -138,6 +136,112 @@ class Chatbot:
             print(f"An error occurred: {e}")
             return 1  # failsafe
 
+    def start_chat(self):
+        while True:
+            prompt = ""
+            genmode = ""
+
+            genmode = input(
+                """Please choose one of the following options:
+            *Enter 't' to enter a text prompt.
+            *Enter 'c' to start a chat.
+            *Enter 'f' to prefill the history.
+            *Enter 'p' to print chat history.
+            *Enter 'b' to break rpm limit
+            *Enter 'q' to quit.
+            *Enter 'query' to query the sql lite database, json format.
+            Option: """
+            )
+            self.chat_log += self.chat_history
+            self.chat_history = []
+
+            if genmode == "q":  # quit
+                print("Exiting the application.")
+                break
+
+            elif genmode == "f":  # prefill
+
+                gist_url = "https://gist.githubusercontent.com/serbeii/7887216a6719cd2442cbe303e283e191/raw/848b621c990122ba1d41f8fee0864d3458a0d249/evil_text.txt"
+
+                gist_response = requests.get(gist_url)
+
+                evil_text = gist_response.text
+
+                if self.start_time == 0:
+                    self._start_timer()
+
+                prompt = evil_text
+
+                while True:
+                    self._chat(prompt)
+
+                    prefill_again = input(
+                        "would you like to fill the history more ? y/n \n"
+                    )
+                    if prefill_again == "y":
+                        prompt = evil_text
+                        continue
+
+                    if prompt == "q":
+                        break
+
+                    prompt = input()
+
+            elif genmode == "p":  # print chat log
+                print("\nChat History:\n")
+                for user, message in self.chat_log:
+                    print(f"{user}: {message}")
+                print("\n")
+
+            elif genmode == "t":  # enter text
+
+                prompt = input("Enter your text: \n")
+
+                if prompt == "q":
+                    continue
+
+                if self.start_time == 0:
+                    self._start_timer()
+
+                self._chat(prompt)
+
+            elif genmode == "c":  # chat
+
+                if self.start_time == 0:
+                    self._start_timer()
+
+                prompt = "Hello"
+
+                while True:
+                    self._chat(prompt)
+                    prompt = input()
+
+                    if prompt == "q":
+                        genmode = ""
+                        break
+
+            elif genmode == "b":  # break limits
+
+                if self.start_time == 0:
+                    self._start_timer()
+
+                while True:
+                    self._chat("Hello World!")
+
+            elif genmode == "query":
+
+                print("Enter your query in natural language")
+
+                while True:
+                    prompt = input()
+
+                    if prompt == "q":
+                        break
+                    self._query(prompt)
+
+            else:
+                continue
+
     def _query_database(self, query, try_count):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
@@ -149,7 +253,7 @@ class Chatbot:
             query1 = query[index1 + 6 : index2]
         else:
             print("Can not query the database based on the given prompt")
-            return
+            return ""
         try:
             cursor.execute(query1)
 
@@ -161,7 +265,7 @@ class Chatbot:
                 "you have made this error: {e} \n provide the correct query",
                 try_count + 1,
             )
-            return
+            return ""
 
         # Fetch all results
         results = cursor.fetchall()
@@ -169,10 +273,45 @@ class Chatbot:
         # Close the connection
         conn.close()
 
-        for result in results:
-            print(f"{BLUE}{result}{RESET}")
+        return results
 
     def _query(self, prompt):
+        if self._check_for_exceptions(prompt) == 1:
+            return
+
+        self.chat_history.append(("User", prompt))
+
+        response = self.get_response(self.query_system_instruction)
+
+        if response == "":
+            self.chat_history.pop()
+            return
+
+        self.chat_history.append(("Gemini", response.text))
+
+        current_token_count = self.get_token_count(
+            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+        )
+        info = (
+            "Context Window: "
+            + str(current_token_count)
+            + f" / {self.context_window_limit}"
+        )
+
+        print(f"{RED}{info}{RESET}")
+
+        schema = self._get_schema(response.text)
+        if schema == "":
+            return
+        query = self._query_database(response.text, 0)
+        if query == "":
+            return
+
+        json_query = self.get_JSON_response(query, schema)
+        print(f"{RED}{json_query.text}{RESET}")
+
+    def _chat(self, prompt):  # chatting function
+
         if self._check_for_exceptions(prompt) == 1:
             return
 
@@ -196,14 +335,53 @@ class Chatbot:
         )
 
         print(f"{RED}{info}{RESET}")
-        self._query_database(response.text, 0)
+        print(f"{BLUE}{response.text}{RESET}", end="")
 
-    def chat_prompt(self, prompt):
+    def get_response(self, system_instruction):  # api call
         try:
-            response = self.chat.send_message(prompt)
-            return response.text
+            response = self.client.models.generate_content(
+                model=self.model.name,
+                contents="\n".join(
+                    [f"{user}: {message}" for user, message in self.chat_history]
+                ),
+                config={
+                    "system_instruction": system_instruction,
+                },
+            )
+            return response
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 return ""
 
-            return self.chat_prompt(prompt)
+            return self.get_response()
+
+    def get_JSON_response(self, query, schema):
+        try:
+            response = self.client.models.generate_content(
+                model=self.model.name,
+                contents="\n".join(
+                    [f"{user}: {message}" for user, message in self.chat_history]
+                ),
+                config={
+                    "system_instruction": "use this schema: " + schema,
+                    "response_mime_type": "application/json",
+                },
+            )
+            return response
+        except Exception as e:
+            if self._fix_exceptions(e) == 1:
+                return ""
+
+            return self.get_JSON_response()
+
+    def _get_schema(self, output):
+        index1 = output.find("```json")
+        index2 = output[index1 + 6 :].find("```") + index1 + 6
+
+        if index1 != -1 and index2 != -1:
+            output = output[index1 + 6 : index2]
+        else:
+            print("Can not get the schema")
+            return ""
+
+        return output
