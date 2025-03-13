@@ -203,42 +203,85 @@ class Chatbot:
     def start_chat(self):
             # Create configuration with system instruction
             generate_content_config = types.GenerateContentConfig(
-                temperature=0.7,
+                temperature=1,
                 top_p=0.95,
                 top_k=40,
+                max_output_tokens=8192,
+                safety_settings=[
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_HARASSMENT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_HATE_SPEECH",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_CIVIC_INTEGRITY",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                ],
                 response_mime_type="application/json",
                 system_instruction=[
                     types.Part.from_text(
-                        text="""You are a LLM who understands and can respond in Turkish or English based on user input. 
-                                I am the user, a company manager who's working with a SQLite database. 
-                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL.
-                                statement, execute that statement on the SQLite database, and return the results. The format of your response is structured JSON. 
-                                Your responses MUST be in JSON format according to the schema:
+                        text="""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
+                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement, execute that statement on the SQLite database, and return the results. 
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a structured output in JSON format as provided in: 
                                 {
-                                    "name": "string",
+                                "type": "object",
+                                "properties": {
+                                    "certainty": {
+                                    "type": "number",
+                                    "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
+                                    },
+                                    "sql": {
                                     "type": "string",
-                                    "description": "string"
-                                 }
+                                    "description": "The SQL query that was generated or used to retrieve information."
+                                    },
+                                    "message": {
+                                    "type": "string",
+                                    "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query."
+                                    }
+                                },
+                                "required": [
+                                    "certainty",
+                                    "sql",
+                                    "message"
+                                ]
+                                }
                             """
                     ),
                 ],
                 response_schema={
                     "type": "object",
                     "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": ""
+                        "certainty": {
+                            "type": "number",
+                            "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
                         },
-                        "type": {
+                        "sql": {
                             "type": "string",
-                            "description": ""
+                            "description": "The SQL query that was generated or used to retrieve information."
                         },
-                        "description": {
+                        "message": {
                             "type": "string",
-                            "description": ""
+                            "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query.",
                         }
                     },
-                    # "required": ["instrument_name", "instrument_type"]
+                    "required": [
+                        "certainty",
+                        "sql",
+                        "message"
+                        ]
                 }
             )
             
