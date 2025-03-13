@@ -20,7 +20,7 @@ class Chatbot:
         self.chat_history = []
         self.chat_log = []
         self.query_system_instruction = (
-            "If user prompt is relating to querying the database, process user's request to an sql query based on the provided database table. If not, return empty. Later, provide a json schema based on the query and the database tables. Save the json as query = String and schema = dict. Here are the database's create tables:\n"
+            "If user prompt is relating to querying the database, process user's request to an sql query based on the provided database table. If not, return empty. Later, provide a schema based on the query and the database tables. Save the json as query = String and schema = dict. Here are the database's create tables:\n"
             + "\n".join(self.get_create_tables())
         )
         self.input_token_limit = model.input_token_limit - len(
