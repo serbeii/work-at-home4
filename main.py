@@ -26,6 +26,7 @@ def test(message, history):
 
 if __name__ == "__main__":
     # start initialization
+    global chatbot
     load_dotenv()
     API_KEY = os.getenv("GOOGLE_API_KEY")
 
@@ -44,6 +45,5 @@ if __name__ == "__main__":
     # end initialization
     demo = gr.ChatInterface(
         test, type="messages", title="work@home4", description="Lorem Ipsum Dolor"
-    )  # create a chat interface
-    demo.launch()  # launch the chat interface
+    ).launch()
     # start_app(chatbot)

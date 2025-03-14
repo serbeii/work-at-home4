@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import sqlite3
 from dotenv import load_dotenv
 import os
+import json
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
@@ -312,10 +313,16 @@ class Chatbot:
                 model=self.model_name,
                 config=generate_content_config
             )
-    def chat_prompt(self, message):
+
+    def chat_prompt(self, prompt):
         try:
             response = self.chat.send_message(prompt)
-            return response.text
+            fields = json.loads(response.text)
+            message = fields["message"]
+            if fields["certainty"] >= 0.8 and (query := fields["sql"]):
+                message = message + "\n" + fields["sql"]
+                print(message)
+            return response
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 return ""
