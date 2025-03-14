@@ -1,21 +1,23 @@
 from google import genai
+from google.genai import types
 import time
 import requests
 from pydantic import BaseModel
 import sqlite3
+from dotenv import load_dotenv
+import os
 
 BLUE = "\033[94;1m"
 RED = "\033[91;1m"
 RESET = "\033[0m"
 DEBUG = False
 
-
 class Chatbot:
-    def __init__(self, client, model):
+    def __init__(self, client, model_name):
         self.database = "database/Northwind.db"
         self.create_tables = []
         self.client = client
-        self.model = model
+        self.model_name = model_name
         self.chat_history = []
         self.chat_log = []
         # self.context_window_limit = model.input_token_limit + model.output_token_limit
@@ -23,11 +25,8 @@ class Chatbot:
         # self.output_token_limit = model.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
-        self.chat = client.chats.create(model=model)
-        self.system_prompt = (
-            "process user's request to an sql query based on the provided database tables:\n"
-            + "\n".join(self.get_create_tables())
-        )
+        self.chat = None
+        self.start_chat()
 
     def get_create_tables(
         self,
@@ -223,7 +222,97 @@ class Chatbot:
         print(f"{RED}{info}{RESET}")
         self._query_database(response.text, 0)
 
-    def chat_prompt(self, prompt):  # currently used prompt function
+    def start_chat(self):
+            # Create configuration with system instruction
+            generate_content_config = types.GenerateContentConfig(
+                temperature=1,
+                top_p=0.95,
+                top_k=40,
+                max_output_tokens=8192,
+                safety_settings=[
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_HARASSMENT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_HATE_SPEECH",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                    types.SafetySetting(
+                        category="HARM_CATEGORY_CIVIC_INTEGRITY",
+                        threshold="BLOCK_NONE",  # Block none
+                    ),
+                ],
+                response_mime_type="application/json",
+                system_instruction=[
+                    types.Part.from_text(
+                        text="""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
+                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement, execute that statement on the SQLite database, and return the results. 
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a structured output in JSON format as provided in: 
+                                {
+                                "type": "object",
+                                "properties": {
+                                    "certainty": {
+                                    "type": "number",
+                                    "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
+                                    },
+                                    "sql": {
+                                    "type": "string",
+                                    "description": "The SQL query that was generated or used to retrieve information."
+                                    },
+                                    "message": {
+                                    "type": "string",
+                                    "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query."
+                                    }
+                                },
+                                "required": [
+                                    "certainty",
+                                    "sql",
+                                    "message"
+                                ]
+                                }
+                            """
+                    ),
+                ],
+                response_schema={
+                    "type": "object",
+                    "properties": {
+                        "certainty": {
+                            "type": "number",
+                            "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
+                        },
+                        "sql": {
+                            "type": "string",
+                            "description": "The SQL query that was generated or used to retrieve information."
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query.",
+                        }
+                    },
+                    "required": [
+                        "certainty",
+                        "sql",
+                        "message"
+                        ]
+                }
+            )
+            
+            # Create a chat session with the config
+            self.chat = self.client.chats.create(
+                model=self.model_name,
+                config=generate_content_config
+            )
+    def chat_prompt(self, message):
         try:
             response = self.chat.send_message(prompt)
             return response.text

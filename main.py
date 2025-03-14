@@ -11,11 +11,11 @@ def start_app(chatbot):
     chatbot.start_chat()
 
 
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
-client = genai.Client(api_key=API_KEY)
-model_name = "gemini-2.0-flash-lite"
-chatbot = Chatbot(client, model_name)
+#load_dotenv()
+#API_KEY = os.getenv("GOOGLE_API_KEY")
+#client = genai.Client(api_key=API_KEY)
+#model_name = "gemini-2.0-flash-lite"
+#chatbot = Chatbot(client, model_name)
 
 
 def test(message, history):
@@ -26,10 +26,10 @@ def test(message, history):
 
 if __name__ == "__main__":
     # start initialization
-    # load_dotenv()
-    # API_KEY = os.getenv("GOOGLE_API_KEY")
-    # client = genai.Client(api_key=API_KEY)
+    load_dotenv()
+    API_KEY = os.getenv("GOOGLE_API_KEY")
 
+    client = genai.Client(api_key=API_KEY)
     model_name = "gemini-2.0-flash-lite"
 
     models_list = client.models.list(config={"page_size": 5})  # get the list of models
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             model = model1
             break
 
-    chatbot = Chatbot(client, model)
+    chatbot = Chatbot(client, model_name)
     # end initialization
     demo = gr.ChatInterface(
         test, type="messages", title="work@home4", description="Lorem Ipsum Dolor"
