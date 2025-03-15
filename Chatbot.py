@@ -25,8 +25,10 @@ class Chatbot:
                                 You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
                                 Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement along with a json schema for the sql output.
                                 Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a json schema for he possible sql output. 
-                                The schema for the database is as follows: \n {"\n".join(self.get_create_tables())}
-                            """
+                                The schema for the database is as follows:
+                                """ + "\n".join(
+            self.get_create_tables()
+        )
         self.initial_schema = {
             "type": "object",
             "properties": {
@@ -145,7 +147,7 @@ class Chatbot:
             self._shrink_chat_history(prompt)
             return 0
         elif total_tokens >= self.context_window_limit * 8 / 10:
-            print("Warning: Context window is almost full.")
+            print("Warning: Context window is" " almost full.")
             return 0
 
         return 0
@@ -224,7 +226,7 @@ class Chatbot:
             response = self.chat.send_message(prompt)
 
             response_dic = json.loads(response.text)
-            print(response_dic)
+
             response_str = "\n".join(
                 [f"{key}: {value}" for key, value in response_dic.items()]
             )
