@@ -186,7 +186,7 @@ class Chatbot:
 
         except Exception as e:
             if try_count == 3:
-                print("Can not query the database based on the given prompt")
+                print("Can not query the database based on the given prompt: ", e)
                 return ""
             # self.query(
             #     "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
@@ -236,7 +236,6 @@ class Chatbot:
             message = ""
             if debug_mode is True:
                 message = response.text
-            print(response_dic["message"])
             message = message + "\n" + response_dic["message"]
 
             if response_dic["schema"] == "":
@@ -250,7 +249,6 @@ class Chatbot:
                 if query_result == "":
                     return message
 
-                print(f"{BLUE}{query_result}{RESET}")
                 instruction = (
                     "Do not use your memory from your pretraining process. Only use this query_output:\n"
                     + "".join([str(row) for row in query_result])
@@ -264,7 +262,6 @@ class Chatbot:
                 )
                 next_response_dic = json.loads(next_response.text)
                 message = message + "\n" + json.dumps(next_response_dic, indent=4)
-                print(f"{RED}{next_response_dic}{RESET}")
             return message
 
         except Exception as e:
