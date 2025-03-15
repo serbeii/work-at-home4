@@ -221,15 +221,12 @@ class Chatbot:
         #    ("User", prompt)
         # )
         try:
-            print("phase1")
             response = self.chat.send_message(prompt)
             response_dic = json.loads(response.text)
             response_str = "\n".join(
                 [f"{key}: {value}" for key, value in response_dic.items()]
             )
-            print("phase2")
-            # self.chat_history.append(("Gemini", response_str))
-            print(response_dic)
+
             message = ""
             if debug_mode is True:
                 message = response.text
