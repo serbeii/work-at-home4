@@ -13,21 +13,50 @@ RED = "\033[91;1m"
 RESET = "\033[0m"
 DEBUG = False
 
+
 class Chatbot:
-    def __init__(self, client, model_name):
-        self.database = "database/Northwind.db"
+    def __init__(self, client, model, database_name):
+        self.database = database_name
         self.create_tables = []
         self.client = client
-        self.model_name = model_name
+        self.model = model
         self.chat_history = []
-        self.chat_log = []
-        # self.context_window_limit = model.input_token_limit + model.output_token_limit
-        # self.input_token_limit = model.input_token_limit
-        # self.output_token_limit = model.output_token_limit
+        self.initial_instruction = f"""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
+                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement along with a json schema for the sql output.
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a json schema for he possible sql output. 
+                                The schema for the database is as follows: \n {"\n".join(self.get_create_tables())}
+                            """
+        self.initial_schema = {
+            "type": "object",
+            "properties": {
+                "certainty": {
+                    "type": "number",
+                    "description": "Confidence that an SQL query should be executed (a value between 0 and 1)",
+                },
+                "sql": {
+                    "type": "string",
+                    "description": "The SQL query that was generated or used to retrieve information.",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query.",
+                },
+                "schema": {
+                    "type": "string",
+                    "description": "The json schema of the output of the SQL query. Decide the properties and required keys of the json object based on the database schema and the query.",
+                },
+            },
+            "required": ["certainty", "sql", "message", "schema"],
+        }
+        self.input_token_limit = model.input_token_limit - (
+            len(self.initial_instruction) + len(json.dumps(self.initial_schema))
+        )
+        self.output_token_limit = model.output_token_limit
+        self.context_window_limit = self.input_token_limit + self.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
         self.chat = None
-        self.start_chat()
 
     def get_create_tables(
         self,
@@ -146,24 +175,14 @@ class Chatbot:
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
 
-        index1 = query.find("```sql")
-        index2 = (
-            query[index1 + 6 :].find("```") + index1 + 6
-        )  # get the sql query from the output
-
-        if index1 != -1 and index2 != -1:
-            query1 = query[index1 + 6 : index2]
-        else:
-            print("Can not query the database based on the given prompt")
-            return
         try:
-            cursor.execute(query1)
+            cursor.execute(query)
 
         except Exception as e:
             if try_count == 3:
                 print("Can not query the database based on the given prompt")
-                return
-            self._query(
+                return ""
+            self.query(
                 "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
                 try_count + 1,
             )
@@ -175,10 +194,9 @@ class Chatbot:
         # Close the connection
         conn.close()
 
-        for result in results:
-            print(f"{BLUE}{result}{RESET}")
+        return results
 
-    def get_response(self):  # api call to get the response (unused)
+    def get_JSON_response(self):
         try:
             response = self.client.models.generate_content(
                 model=self.model.name,
@@ -193,197 +211,108 @@ class Chatbot:
 
             return self.get_response()
 
-    def _query(self, prompt):  # query function (unused)
-        if self._check_for_exceptions(prompt) == 1:  # check for exceptions
-            return
+    def query(self, prompt, debug_mode):  # query function (unused)
+        # if self._check_for_exceptions(prompt) == 1:  # check for exceptions
+        #    return
 
-        self.chat_history.append(
-            ("User", prompt)
-        )  # append the user's prompt to the chat history
+        self.set_chat(self.initial_instruction, self.initial_schema)
 
-        response = self.get_response()  # get the response from the chatbot (unused)
-
-        if (
-            response == ""
-        ):  # if the response is empty == exepction occured, pop the last chat history
-            self.chat_history.pop()
-            return
-
-        self.chat_history.append(("Gemini", response.text))
-
-        current_token_count = self.get_token_count(
-            "\n".join([f"{user}: {message}" for user, message in self.chat_history])
-        )
-        info = (
-            "Context Window: "
-            + str(current_token_count)
-            + f" / {self.context_window_limit}"
-        )
-
-        print(f"{RED}{info}{RESET}")
-        self._query_database(response.text, 0)
-
-    def start_chat(self):
-            # Create configuration with system instruction
-            generate_content_config = types.GenerateContentConfig(
-                temperature=1,
-                top_p=0.95,
-                top_k=40,
-                max_output_tokens=8192,
-                safety_settings=[
-                    types.SafetySetting(
-                        category="HARM_CATEGORY_HARASSMENT",
-                        threshold="BLOCK_NONE",  # Block none
-                    ),
-                    types.SafetySetting(
-                        category="HARM_CATEGORY_HATE_SPEECH",
-                        threshold="BLOCK_NONE",  # Block none
-                    ),
-                    types.SafetySetting(
-                        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        threshold="BLOCK_NONE",  # Block none
-                    ),
-                    types.SafetySetting(
-                        category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                        threshold="BLOCK_NONE",  # Block none
-                    ),
-                    types.SafetySetting(
-                        category="HARM_CATEGORY_CIVIC_INTEGRITY",
-                        threshold="BLOCK_NONE",  # Block none
-                    ),
-                ],
-                response_mime_type="application/json",
-                system_instruction=[
-                    types.Part.from_text(
-                        text="""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
-                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
-                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement, execute that statement on the SQLite database, and return the results. 
-                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a structured output in JSON format as provided. 
-                                The schema for the database is as follows:
-CREATE TABLE Categories
-(      
-    CategoryID INTEGER PRIMARY KEY AUTOINCREMENT,
-    CategoryName TEXT,
-    Description TEXT
-);
-
-CREATE TABLE Customers
-(      
-    CustomerID INTEGER PRIMARY KEY AUTOINCREMENT,
-    CustomerName TEXT,
-    ContactName TEXT,
-    Address TEXT,
-    City TEXT,
-    PostalCode TEXT,
-    Country TEXT
-);
-
-CREATE TABLE Employees
-(
-    EmployeeID INTEGER PRIMARY KEY AUTOINCREMENT,
-    LastName TEXT,
-    FirstName TEXT,
-    BirthDate DATE,
-    Photo TEXT,
-    Notes TEXT
-);
-
-CREATE TABLE Shippers(
-    ShipperID INTEGER PRIMARY KEY AUTOINCREMENT,
-    ShipperName TEXT,
-    Phone TEXT
-);
-
-CREATE TABLE Suppliers(
-    SupplierID INTEGER PRIMARY KEY AUTOINCREMENT,
-    SupplierName TEXT,
-    ContactName TEXT,
-    Address TEXT,
-    City TEXT,
-    PostalCode TEXT,
-    Country TEXT,
-    Phone TEXT
-);
-
-CREATE TABLE Products(
-    ProductID INTEGER PRIMARY KEY AUTOINCREMENT,
-    ProductName TEXT,
-    SupplierID INTEGER,
-    CategoryID INTEGER,
-    Unit TEXT,
-    Price NUMERIC DEFAULT 0,
-	FOREIGN KEY (CategoryID) REFERENCES Categories (CategoryID),
-	FOREIGN KEY (SupplierID) REFERENCES Suppliers (SupplierID)
-);
-
-CREATE TABLE Orders(
-    OrderID INTEGER PRIMARY KEY AUTOINCREMENT,
-    CustomerID INTEGER,
-    EmployeeID INTEGER,
-    OrderDate DATETIME,
-    ShipperID INTEGER,
-    FOREIGN KEY (EmployeeID) REFERENCES Employees (EmployeeID),
-    FOREIGN KEY (CustomerID) REFERENCES Customers (CustomerID),
-    FOREIGN KEY (ShipperID) REFERENCES Shippers (ShipperID)
-);
-
-CREATE TABLE OrderDetails(
-    OrderDetailID INTEGER PRIMARY KEY AUTOINCREMENT,
-    OrderID INTEGER,
-    ProductID INTEGER,
-    Quantity INTEGER,
-	FOREIGN KEY (OrderID) REFERENCES Orders (OrderID),
-	FOREIGN KEY (ProductID) REFERENCES Products (ProductID)
-);
-
-
-                            """
-                    ),
-                ],
-                response_schema={
-                    "type": "object",
-                    "properties": {
-                        "certainty": {
-                            "type": "number",
-                            "description": "Confidence that an SQL query should be executed (a value between 0 and 1)"
-                        },
-                        "sql": {
-                            "type": "string",
-                            "description": "The SQL query that was generated or used to retrieve information."
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query.",
-                        }
-                    },
-                    "required": [
-                        "certainty",
-                        "sql",
-                        "message"
-                        ]
-                }
-            )
-            
-            # Create a chat session with the config
-            self.chat = self.client.chats.create(
-                model=self.model_name,
-                config=generate_content_config
-            )
-
-    def chat_prompt(self, prompt, debug_mode):
+        # self.chat_history.append(
+        #    ("User", prompt)
+        # )
         try:
+            print("phase1")
             response = self.chat.send_message(prompt)
-            fields = json.loads(response.text)
+            response_dic = json.loads(response.text)
+            response_str = "\n".join(
+                [f"{key}: {value}" for key, value in response_dic.items()]
+            )
+            print("phase2")
+            # self.chat_history.append(("Gemini", response_str))
+            print(response_dic)
             message = ""
             if debug_mode is True:
-                message = response.text 
-            message = message + "\n" + fields["message"]
-            if fields["certainty"] >= 0.8 and (query := fields["sql"]):
-                #message = message + "\n" + fields["sql"]
-                print(message)
+                message = response.text
+            message = message + "\n" + response_dic["message"]
+
+            if response_dic["schema"] == "":
+                return message
+
+            schema = json.loads(response_dic["schema"])
+
+            if response_dic["certainty"] >= 0.8:
+                query_result = self._query_database(response_dic["sql"], 0)
+
+                if query_result == "":
+                    return message
+
+                instruction = (
+                    "use this query_output:\n"
+                    + response_dic["sql"]
+                    + " to provide the json file"
+                )
+                self.set_chat(instruction, schema)
+                next_response = self.chat.send_message("Provide the json file")
+                next_response_dic = json.loads(next_response.text)
+                message = message + "\n" + json.dumps(next_response_dic, indent=4)
             return message
+
         except Exception as e:
             if self._fix_exceptions(e) == 1:
+                print(f"An error occurred: {e}")
                 return ""
 
-            return self.chat_prompt(prompt)
+        # current_token_count = self.get_token_count(
+        #    "\n".join([f"{user}: {message}" for user, message in self.chat_history])
+        # )
+
+        # info = (
+        #    "Context Window: "
+        #    + str(current_token_count)
+        #    + f" / {self.context_window_limit}"
+        # )
+
+        # print(f"{RED}{info}{RESET}")
+
+    def set_chat(self, instruction, schema):  # get the initial json
+        # Create configuration with system instruction
+        generate_content_config = types.GenerateContentConfig(
+            temperature=1,
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=8192,
+            safety_settings=[
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HARASSMENT",
+                    threshold="BLOCK_NONE",  # Block none
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HATE_SPEECH",
+                    threshold="BLOCK_NONE",  # Block none
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    threshold="BLOCK_NONE",  # Block none
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold="BLOCK_NONE",  # Block none
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_CIVIC_INTEGRITY",
+                    threshold="BLOCK_NONE",  # Block none
+                ),
+            ],
+            response_mime_type="application/json",
+            system_instruction=[
+                types.Part.from_text(
+                    text=instruction,
+                ),
+            ],
+            response_schema=schema,
+        )
+
+        # Create a chat session with the config
+        self.chat = self.client.chats.create(
+            model=self.model.name, config=generate_content_config
+        )

@@ -6,24 +6,27 @@ import os
 import gradio as gr
 from Chatbot import Chatbot
 
-#load_dotenv()
-#API_KEY = os.getenv("GOOGLE_API_KEY")
-#client = genai.Client(api_key=API_KEY)
-#model_name = "gemini-2.0-flash-lite"
-#chatbot = Chatbot(client, model_name)
+# load_dotenv()
+# API_KEY = os.getenv("GOOGLE_API_KEY")
+# client = genai.Client(api_key=API_KEY)
+# model_name = "gemini-2.0-flash-lite"
+# chatbot = Chatbot(client, model_name)
 
 DEBUG_MODE = False
+
 
 def chat(message, history):
     global chatbot
     global DEBUG_MODE
-    result = chatbot.chat_prompt(prompt=message, debug_mode=DEBUG_MODE)
+    result = chatbot.query(prompt=message, debug_mode=DEBUG_MODE)
     return result
+
 
 def update_debug_state(debug_value):
     global DEBUG_MODE
     DEBUG_MODE = debug_value
     return f"Debug mode is now: {debug_value}"
+
 
 if __name__ == "__main__":
     # start initialization
@@ -42,9 +45,13 @@ if __name__ == "__main__":
             model = model1
             break
 
-    chatbot = Chatbot(client, model_name)
+    database_name = "database/Northwind.db"
+
+    chatbot = Chatbot(client, model, database_name)
     with gr.Blocks() as demo:
-        chatbot_interface = gr.ChatInterface(fn=chat, type="messages", title="Debug Chat", description="Hello world")
+        chatbot_interface = gr.ChatInterface(
+            fn=chat, type="messages", title="Debug Chat", description="Hello world"
+        )
         debug_checkbox = gr.Checkbox(False, label="Enable Debug Mode")
         debug_checkbox.change(fn=update_debug_state, inputs=debug_checkbox)
     demo.launch()
