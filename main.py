@@ -48,6 +48,7 @@ if __name__ == "__main__":
     database_name = "database/Northwind.db"
 
     chatbot = Chatbot(client, model, database_name)
+
     with gr.Blocks() as demo:
         chatbot_interface = gr.ChatInterface(
             fn=chat, type="messages", title="Debug Chat", description="Hello world"

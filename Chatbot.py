@@ -56,7 +56,9 @@ class Chatbot:
         self.context_window_limit = self.input_token_limit + self.output_token_limit
         self.start_time = 0
         self.waiting_time = 0
-        self.chat = None
+        self.chat = self.start_new_chat(
+            self.get_config(self.initial_instruction, self.initial_schema)
+        )
 
     def get_create_tables(
         self,
@@ -182,11 +184,11 @@ class Chatbot:
             if try_count == 3:
                 print("Can not query the database based on the given prompt")
                 return ""
-            self.query(
-                "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
-                try_count + 1,
-            )
-            return
+            # self.query(
+            #     "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
+            #     try_count + 1,
+            # )
+            return ""
 
         # Fetch all results
         results = cursor.fetchall()
@@ -215,14 +217,14 @@ class Chatbot:
         # if self._check_for_exceptions(prompt) == 1:  # check for exceptions
         #    return
 
-        self.set_chat(self.initial_instruction, self.initial_schema)
-
         # self.chat_history.append(
         #    ("User", prompt)
         # )
         try:
             response = self.chat.send_message(prompt)
+
             response_dic = json.loads(response.text)
+            print(response_dic)
             response_str = "\n".join(
                 [f"{key}: {value}" for key, value in response_dic.items()]
             )
@@ -248,8 +250,10 @@ class Chatbot:
                     + response_dic["sql"]
                     + " to provide the json file"
                 )
-                self.set_chat(instruction, schema)
-                next_response = self.chat.send_message("Provide the json file")
+                config = self.get_config(instruction, schema)
+                chat = self.start_new_chat(config)
+
+                next_response = chat.send_message("Provide the json file")
                 next_response_dic = json.loads(next_response.text)
                 message = message + "\n" + json.dumps(next_response_dic, indent=4)
             return message
@@ -271,7 +275,7 @@ class Chatbot:
 
         # print(f"{RED}{info}{RESET}")
 
-    def set_chat(self, instruction, schema):  # get the initial json
+    def get_config(self, instruction, schema):
         # Create configuration with system instruction
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
@@ -309,7 +313,11 @@ class Chatbot:
             response_schema=schema,
         )
 
-        # Create a chat session with the config
-        self.chat = self.client.chats.create(
-            model=self.model.name, config=generate_content_config
+        return generate_content_config
+
+    def start_new_chat(self, config):
+        chat = self.client.chats.create(
+            model=self.model.name,
+            config=config,
         )
+        return chat
