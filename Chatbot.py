@@ -258,29 +258,85 @@ class Chatbot:
                         text="""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
                                 You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
                                 Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement, execute that statement on the SQLite database, and return the results. 
-                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a structured output in JSON format as provided in: 
-                                {
-                                "type": "object",
-                                "properties": {
-                                    "certainty": {
-                                    "type": "number",
-                                    "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
-                                    },
-                                    "sql": {
-                                    "type": "string",
-                                    "description": "The SQL query that was generated or used to retrieve information."
-                                    },
-                                    "message": {
-                                    "type": "string",
-                                    "description": "A conversational message providing context, results, or next steps.  In this case, something about the user and a query."
-                                    }
-                                },
-                                "required": [
-                                    "certainty",
-                                    "sql",
-                                    "message"
-                                ]
-                                }
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a structured output in JSON format as provided. 
+                                The schema for the database is as follows:
+CREATE TABLE Categories
+(      
+    CategoryID INTEGER PRIMARY KEY AUTOINCREMENT,
+    CategoryName TEXT,
+    Description TEXT
+);
+
+CREATE TABLE Customers
+(      
+    CustomerID INTEGER PRIMARY KEY AUTOINCREMENT,
+    CustomerName TEXT,
+    ContactName TEXT,
+    Address TEXT,
+    City TEXT,
+    PostalCode TEXT,
+    Country TEXT
+);
+
+CREATE TABLE Employees
+(
+    EmployeeID INTEGER PRIMARY KEY AUTOINCREMENT,
+    LastName TEXT,
+    FirstName TEXT,
+    BirthDate DATE,
+    Photo TEXT,
+    Notes TEXT
+);
+
+CREATE TABLE Shippers(
+    ShipperID INTEGER PRIMARY KEY AUTOINCREMENT,
+    ShipperName TEXT,
+    Phone TEXT
+);
+
+CREATE TABLE Suppliers(
+    SupplierID INTEGER PRIMARY KEY AUTOINCREMENT,
+    SupplierName TEXT,
+    ContactName TEXT,
+    Address TEXT,
+    City TEXT,
+    PostalCode TEXT,
+    Country TEXT,
+    Phone TEXT
+);
+
+CREATE TABLE Products(
+    ProductID INTEGER PRIMARY KEY AUTOINCREMENT,
+    ProductName TEXT,
+    SupplierID INTEGER,
+    CategoryID INTEGER,
+    Unit TEXT,
+    Price NUMERIC DEFAULT 0,
+	FOREIGN KEY (CategoryID) REFERENCES Categories (CategoryID),
+	FOREIGN KEY (SupplierID) REFERENCES Suppliers (SupplierID)
+);
+
+CREATE TABLE Orders(
+    OrderID INTEGER PRIMARY KEY AUTOINCREMENT,
+    CustomerID INTEGER,
+    EmployeeID INTEGER,
+    OrderDate DATETIME,
+    ShipperID INTEGER,
+    FOREIGN KEY (EmployeeID) REFERENCES Employees (EmployeeID),
+    FOREIGN KEY (CustomerID) REFERENCES Customers (CustomerID),
+    FOREIGN KEY (ShipperID) REFERENCES Shippers (ShipperID)
+);
+
+CREATE TABLE OrderDetails(
+    OrderDetailID INTEGER PRIMARY KEY AUTOINCREMENT,
+    OrderID INTEGER,
+    ProductID INTEGER,
+    Quantity INTEGER,
+	FOREIGN KEY (OrderID) REFERENCES Orders (OrderID),
+	FOREIGN KEY (ProductID) REFERENCES Products (ProductID)
+);
+
+
                             """
                     ),
                 ],
@@ -289,7 +345,7 @@ class Chatbot:
                     "properties": {
                         "certainty": {
                             "type": "number",
-                            "description": "Confidence level in the SQL query or information provided (a value between 0 and 1)"
+                            "description": "Confidence that an SQL query should be executed (a value between 0 and 1)"
                         },
                         "sql": {
                             "type": "string",
@@ -314,15 +370,18 @@ class Chatbot:
                 config=generate_content_config
             )
 
-    def chat_prompt(self, prompt):
+    def chat_prompt(self, prompt, debug_mode):
         try:
             response = self.chat.send_message(prompt)
             fields = json.loads(response.text)
-            message = fields["message"]
+            message = ""
+            if debug_mode is True:
+                message = response.text 
+            message = message + "\n" + fields["message"]
             if fields["certainty"] >= 0.8 and (query := fields["sql"]):
-                message = message + "\n" + fields["sql"]
+                #message = message + "\n" + fields["sql"]
                 print(message)
-            return response
+            return message
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 return ""
