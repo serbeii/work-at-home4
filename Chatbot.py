@@ -22,10 +22,10 @@ class Chatbot:
         self.model = model
         self.chat_history = []
         self.initial_instruction = f"""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
-                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. 
-                                Your task is to extract relevant information from my natural language query, transform it into a valid SQL statement along with a json schema for the sql output.
-                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sql statement and a json schema for he possible sql output. 
-                                The schema for the database is as follows:
+                                You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. Our database is SQLite.
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQLite statement along with a json schema for the sqlite output.
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sqlite statement and a json schema for he possible sqlite output. 
+                                The schema for the SQLite database is as follows:
                                 """ + "\n".join(
             self.get_create_tables()
         )
@@ -181,6 +181,8 @@ class Chatbot:
 
         try:
             cursor.execute(query)
+            results = cursor.fetchall()
+            return results
 
         except Exception as e:
             if try_count == 3:
@@ -193,12 +195,12 @@ class Chatbot:
             return ""
 
         # Fetch all results
-        results = cursor.fetchall()
-
+        #results = cursor.fetchall()
+        finally:
         # Close the connection
-        conn.close()
+            conn.close()
 
-        return results
+        #return results
 
     def get_JSON_response(self):
         try:
