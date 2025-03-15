@@ -176,6 +176,22 @@ class Chatbot:
             return 1  # failsafe
 
     def _query_database(self, query, try_count):  # query database
+
+        restricted_keywords = [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "CREATE",
+            "ALTER",
+            "DROP",
+            "TRUNCATE",
+            "RENAME",
+            "GRANT",
+            "REVOKE",
+        ]
+        if query.contains(restricted_keywords):
+            print("Restricted keyword used in the query")
+            return ""
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
 
