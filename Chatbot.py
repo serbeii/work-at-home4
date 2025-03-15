@@ -195,12 +195,12 @@ class Chatbot:
             return ""
 
         # Fetch all results
-        #results = cursor.fetchall()
+        # results = cursor.fetchall()
         finally:
-        # Close the connection
+            # Close the connection
             conn.close()
 
-        #return results
+        # return results
 
     def get_JSON_response(self):
         try:
@@ -236,6 +236,7 @@ class Chatbot:
             message = ""
             if debug_mode is True:
                 message = response.text
+            print(response_dic["message"])
             message = message + "\n" + response_dic["message"]
 
             if response_dic["schema"] == "":
@@ -249,17 +250,21 @@ class Chatbot:
                 if query_result == "":
                     return message
 
+                print(f"{BLUE}{query_result}{RESET}")
                 instruction = (
-                    "use this query_output:\n"
-                    + response_dic["sql"]
+                    "Do not use your memory from your pretraining process. Only use this query_output:\n"
+                    + "".join([str(row) for row in query_result])
                     + " to provide the json file"
                 )
                 config = self.get_config(instruction, schema)
                 chat = self.start_new_chat(config)
 
-                next_response = chat.send_message("Provide the json file")
+                next_response = chat.send_message(
+                    "Provide the json file. Do not use your memory from your pretraining process. Only use provided data."
+                )
                 next_response_dic = json.loads(next_response.text)
                 message = message + "\n" + json.dumps(next_response_dic, indent=4)
+                print(f"{RED}{next_response_dic}{RESET}")
             return message
 
         except Exception as e:
