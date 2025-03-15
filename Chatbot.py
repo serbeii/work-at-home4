@@ -189,10 +189,12 @@ class Chatbot:
             "GRANT",
             "REVOKE",
         ]
-        if query.contains(restricted_keywords):
+        if any(keyword in query.upper() for keyword in restricted_keywords):
             print("Restricted keyword used in the query")
             return ""
+
         conn = sqlite3.connect(self.database)
+        # conn = sqlite3.connect(fileself.database, mode=ro, uri=True)
         cursor = conn.cursor()
 
         try:
