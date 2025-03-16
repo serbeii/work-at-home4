@@ -23,7 +23,7 @@ class Chatbot:
         self.chat_history = []
         self.initial_instruction = f"""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
                                 You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. Our database is SQLite.
-                                Your task is to extract relevant information from my natural language query, transform it into a valid SQLite statement along with a json schema for the sqlite output.
+                                Your task is to extract relevant information from my natural language query, transform it into a valid SQLite statement, which should be a single sql statement, along with a json schema for the sqlite output.
                                 Your response will always composed of a text message, a certainty as a value between 0 and 1, an sqlite statement and a json schema for he possible sqlite output. 
                                 The schema for the SQLite database is as follows:
                                 """ + "\n".join(
@@ -38,7 +38,7 @@ class Chatbot:
                 },
                 "sql": {
                     "type": "string",
-                    "description": "The SQL query that was generated or used to retrieve information.",
+                    "description": "The SQL query that is to be generated to retrieve information. It should be a single SQL lite statement.",
                 },
                 "message": {
                     "type": "string",
@@ -200,6 +200,8 @@ class Chatbot:
         try:
             cursor.execute(query)
             results = cursor.fetchall()
+            print("aaaaa")
+            print(results)
             return results
 
         except Exception as e:
@@ -210,6 +212,7 @@ class Chatbot:
             #     "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
             #     try_count + 1,
             # )
+            print("Can not query the database based on the given prompt YET: ", e)
             return ""
 
         # Fetch all results
@@ -266,7 +269,8 @@ class Chatbot:
 
                 if query_result == "":
                     return message
-
+                if debug_mode is True:
+                    message = message + "\n" + json.dumps(query_result, indent=4)
                 instruction = (
                     "Do not use your memory from your pretraining process. Only use this query_output:\n"
                     + "".join([str(row) for row in query_result])
