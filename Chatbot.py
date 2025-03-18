@@ -24,7 +24,7 @@ class Chatbot:
         self.initial_instruction = f"""You are a LLM who understands and can respond only in Turkish or English based on the language of user's input. If user talks in Turkish, respond in Turkish. If user talks in English, then respond in English.
                                 You are prohibited to answer in any other language.  I am the user, a company manager who's working with a SQLite database. Our database is SQLite.
                                 Your task is to extract relevant information from my natural language query, transform it into a valid SQLite statement, which should be a single sql statement, along with a json schema for the sqlite output.
-                                Your response will always composed of a text message, a certainty as a value between 0 and 1, an sqlite statement and a json schema for he possible sqlite output. 
+                                Your response will always composed of a text message, a certainty as a value between 0 and 1 which will determine if you need to give an SQL query to the user, an SQLite statement  when certainity is above 0.80 and a JSON schema for the possible SQLite output (Do not use Tab Indents).
                                 The schema for the SQLite database is as follows:
                                 """ + "\n".join(
             self.get_create_tables()
@@ -46,7 +46,7 @@ class Chatbot:
                 },
                 "schema": {
                     "type": "string",
-                    "description": "The json schema of the output of the SQL query. Decide the properties and required keys of the json object based on the database schema and the query.",
+                    "description": "The JSON schema of the expected output of the SQL query in compact format without extra whitespace. Define the properties and required keys of the JSON object based on the database schema and the query.",
                 },
             },
             "required": ["certainty", "sql", "message", "schema"],
