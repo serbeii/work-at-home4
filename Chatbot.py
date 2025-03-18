@@ -133,22 +133,22 @@ class Chatbot:
             print("Input window is full, please enter a shorter text.")
             return 1
 
-        chat_history_str = "\n".join(
-            [f"{user}: {message}" for user, message in self.chat_history]
-        )
-        total_tokens = (
-            self.get_token_count(chat_history_str)
-            + self.get_token_count(prompt)
-            + self.output_token_limit
-        )
+        # chat_history_str = "\n".join(
+        #     [f"{user}: {message}" for user, message in self.chat_history]
+        # )
+        # total_tokens = (
+        #     self.get_token_count(chat_history_str)
+        #     + self.get_token_count(prompt)
+        #     + self.output_token_limit
+        # )
 
-        if total_tokens >= self.context_window_limit:
-            print("Context window is full, therefore it will shrink.")
-            self._shrink_chat_history(prompt)
-            return 0
-        elif total_tokens >= self.context_window_limit * 8 / 10:
-            print("Warning: Context window is" " almost full.")
-            return 0
+        # if total_tokens >= self.context_window_limit:
+        #     print("Context window is full, therefore it will shrink.")
+        #     self._shrink_chat_history(prompt)
+        #     return 0
+        # elif total_tokens >= self.context_window_limit * 8 / 10:
+        #     print("Warning: Context window is" " almost full.")
+        #     return 0
 
         return 0
 
@@ -239,12 +239,16 @@ class Chatbot:
             return self.get_response()
 
     def query(self, prompt, debug_mode):  # query function (unused)
-        # if self._check_for_exceptions(prompt) == 1:  # check for exceptions
-        #    return
+        if self._check_for_exceptions(prompt) == 1:  # check for exceptions
+            return
+
+        if self.start_time == 0:
+            self._start_timer()
 
         # self.chat_history.append(
         #    ("User", prompt)
         # )
+
         try:
             response = self.chat.send_message(prompt)
 
@@ -300,8 +304,6 @@ class Chatbot:
         #    + str(current_token_count)
         #    + f" / {self.context_window_limit}"
         # )
-
-        # print(f"{RED}{info}{RESET}")
 
     def get_config(self, instruction, schema):
         # Create configuration with system instruction
