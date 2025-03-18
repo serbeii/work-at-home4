@@ -28,7 +28,7 @@ if __name__ == "__main__":
     API_KEY = os.getenv("GOOGLE_API_KEY")
 
     client = genai.Client(api_key=API_KEY)
-    model_name = "gemini-2.0-flash-lite"
+    model_name = "gemini-2.0-flash"
 
     models_list = client.models.list(config={"page_size": 5})  # get the list of models
     model = None

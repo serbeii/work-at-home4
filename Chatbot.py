@@ -38,7 +38,7 @@ class Chatbot:
                 },
                 "schema": {
                     "type": "string",
-                    "description": "The JSON schema of the expected output of the SQL query in compact format without extra whitespace. Define the properties and required keys of the JSON object based on the database schema and the query.",
+                    "description": "The JSON schema of the expected output of the SQL query. Define the properties and required keys of the JSON object based on the database schema and the query. Do not use tab indents or newlines."
                 },
             },
             "required": ["certainty", "sql", "message", "schema"],
