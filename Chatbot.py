@@ -245,65 +245,50 @@ class Chatbot:
         if self.start_time == 0:
             self._start_timer()
 
-        # self.chat_history.append(
-        #    ("User", prompt)
-        # )
-
         try:
             response = self.chat.send_message(prompt)
 
-            response_dic = json.loads(response.text)
+            response_dict = json.loads(response.text)
 
             response_str = "\n".join(
-                [f"{key}: {value}" for key, value in response_dic.items()]
+                [f"{key}: {value}" for key, value in response_dict.items()]
             )
 
             message = ""
             if debug_mode is True:
                 message = response.text
-            message = message + "\n" + response_dic["message"]
+            message = message + "\n" + response_dict["message"]
 
-            if response_dic["schema"] == "":
+            if response_dict["schema"] == "":
                 return message
 
-            schema = json.loads(response_dic["schema"])
+            schema = json.loads(response_dict["schema"])
 
-            if response_dic["certainty"] >= 0.8:
-                query_result = self._query_database(response_dic["sql"], 0)
+            if response_dict["certainty"] >= 0.8:
+                query_result = self._query_database(response_dict["sql"], 0)
 
                 if query_result == "":
                     return message
                 if debug_mode is True:
                     message = message + "\n" + json.dumps(query_result, indent=4)
-                instruction = (
-                    "Do not use your memory from your pretraining process. Only use this query_output:\n"
-                    + "".join([str(row) for row in query_result])
-                    + " to provide the json file"
+                    
+                system_instruction = (
+                    "Do not use your memory from your pretraining process or the chat history."+ 
+                    "Only use the query output provided by the user"
+                    + " to provide necessary information"
                 )
-                config = self.get_config(instruction, schema)
-                chat = self.start_new_chat(config)
 
-                next_response = chat.send_message(
-                    "Provide the json file. Do not use your memory from your pretraining process. Only use provided data."
-                )
-                next_response_dic = json.loads(next_response.text)
-                message = message + "\n" + json.dumps(next_response_dic, indent=4)
+                inner_prompt = "".join([str(row) for row in query_result])
+                config = self.get_config(system_instruction, schema)
+                next_response = self.chat.send_message(inner_prompt,config)
+                next_response_dict = json.loads(next_response.text)
+                message = message + "\n" + json.dumps(next_response_dict, indent=4)
             return message
 
         except Exception as e:
             if self._fix_exceptions(e) == 1:
                 print(f"An error occurred: {e}")
                 return ""
-
-        # current_token_count = self.get_token_count(
-        #    "\n".join([f"{user}: {message}" for user, message in self.chat_history])
-        # )
-
-        # info = (
-        #    "Context Window: "
-        #    + str(current_token_count)
-        #    + f" / {self.context_window_limit}"
-        # )
 
     def get_config(self, instruction, schema):
         # Create configuration with system instruction
