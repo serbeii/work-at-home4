@@ -1,18 +1,10 @@
 from google import genai
 from google.genai import types
 import time
-import requests
-from pydantic import BaseModel
 import sqlite3
-from dotenv import load_dotenv
-import os
 import json
 
-BLUE = "\033[94;1m"
-RED = "\033[91;1m"
-RESET = "\033[0m"
 DEBUG = False
-
 
 class Chatbot:
     def __init__(self, client, model, database_name):
@@ -97,58 +89,12 @@ class Chatbot:
         except Exception as e:
             return 0
 
-    def _shrink_chat_history(self, prompt):  # shrinks the context window if it is full
-        chat_history_str = "\n".join(
-            [f"{user}: {message}" for user, message in self.chat_history]
-        )
-        total_tokens = (
-            self.get_token_count(chat_history_str)
-            + self.get_token_count(prompt)
-            + self.output_token_limit
-        )
-
-        while (
-            total_tokens >= self.context_window_limit or len(self.chat_history) % 2 == 1
-        ):  # shrink until context window < limit or a chat is cut in half
-            # shrink from the beginning
-
-            self.chat_history = self.chat_history[1:]  # shrink from the beginning
-
-            chat_history_str = "\n".join(
-                [f"{user}: {message}" for user, message in self.chat_history]
-            )
-            total_tokens = (
-                self.get_token_count(chat_history_str)
-                + self.get_token_count(prompt)
-                + self.output_token_limit
-            )
-
-    def _summarize_history(self):  # inactive
-        pass
-
     def _check_for_exceptions(
         self, prompt
     ):  # checks for possible exceptions and fixes them BEFORE using the api
         if self.get_token_count(prompt) >= self.input_token_limit:
             print("Input window is full, please enter a shorter text.")
             return 1
-
-        # chat_history_str = "\n".join(
-        #     [f"{user}: {message}" for user, message in self.chat_history]
-        # )
-        # total_tokens = (
-        #     self.get_token_count(chat_history_str)
-        #     + self.get_token_count(prompt)
-        #     + self.output_token_limit
-        # )
-
-        # if total_tokens >= self.context_window_limit:
-        #     print("Context window is full, therefore it will shrink.")
-        #     self._shrink_chat_history(prompt)
-        #     return 0
-        # elif total_tokens >= self.context_window_limit * 8 / 10:
-        #     print("Warning: Context window is" " almost full.")
-        #     return 0
 
         return 0
 
@@ -177,31 +123,12 @@ class Chatbot:
 
     def _query_database(self, query, try_count):  # query database
 
-        restricted_keywords = [
-            "INSERT",
-            "UPDATE",
-            "DELETE",
-            "CREATE",
-            "ALTER",
-            "DROP",
-            "TRUNCATE",
-            "RENAME",
-            "GRANT",
-            "REVOKE",
-        ]
-        if any(keyword in query.upper() for keyword in restricted_keywords):
-            print("Restricted keyword used in the query")
-            return ""
-
-        conn = sqlite3.connect(self.database)
-        # conn = sqlite3.connect(fileself.database, mode=ro, uri=True)
+        conn = sqlite3.connect(self.database,uri=True)
         cursor = conn.cursor()
 
         try:
             cursor.execute(query)
             results = cursor.fetchall()
-            print("aaaaa")
-            print(results)
             return results
 
         except Exception as e:
@@ -215,28 +142,9 @@ class Chatbot:
             print("Can not query the database based on the given prompt YET: ", e)
             return ""
 
-        # Fetch all results
-        # results = cursor.fetchall()
         finally:
             # Close the connection
             conn.close()
-
-        # return results
-
-    def get_JSON_response(self):
-        try:
-            response = self.client.models.generate_content(
-                model=self.model.name,
-                contents="\n".join(
-                    [f"{user}: {message}" for user, message in self.chat_history]
-                ),
-            )
-            return response
-        except Exception as e:
-            if self._fix_exceptions(e) == 1:
-                return ""
-
-            return self.get_response()
 
     def query(self, prompt, debug_mode):  # query function (unused)
         if self._check_for_exceptions(prompt) == 1:  # check for exceptions

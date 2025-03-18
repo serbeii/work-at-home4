@@ -1,16 +1,9 @@
 from google import genai
-import time
-import requests
 from dotenv import load_dotenv
 import os
 import gradio as gr
 from Chatbot import Chatbot
 
-# load_dotenv()
-# API_KEY = os.getenv("GOOGLE_API_KEY")
-# client = genai.Client(api_key=API_KEY)
-# model_name = "gemini-2.0-flash-lite"
-# chatbot = Chatbot(client, model_name)
 
 DEBUG_MODE = False
 
@@ -45,7 +38,7 @@ if __name__ == "__main__":
             model = model1
             break
 
-    database_name = "database/Northwind.db"
+    database_name = "file:database/Northwind.db?mode=ro"
 
     chatbot = Chatbot(client, model, database_name)
 
