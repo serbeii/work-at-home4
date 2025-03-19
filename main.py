@@ -12,7 +12,8 @@ def chat(message, history):
     global chatbot
     global DEBUG_MODE
     result = chatbot.query(prompt=message, debug_mode=DEBUG_MODE)
-    return result
+    exceptions = chatbot.exceptions
+    return "\n".join(exceptions) + result
 
 
 def update_debug_state(debug_value):
