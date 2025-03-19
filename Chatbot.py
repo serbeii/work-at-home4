@@ -3,8 +3,10 @@ from google.genai import types
 import time
 import sqlite3
 import json
+import gradio as gr
 
 DEBUG = False
+
 
 class Chatbot:
     def __init__(self, client, model, database_name):
@@ -53,6 +55,7 @@ class Chatbot:
         self.chat = self.start_new_chat(
             self.get_config(self.initial_instruction, self.initial_schema)
         )
+        self.exceptions = []
 
     def get_create_tables(
         self,
@@ -92,38 +95,62 @@ class Chatbot:
     def _check_for_exceptions(
         self, prompt
     ):  # checks for possible exceptions and fixes them BEFORE using the api
+
         if self.get_token_count(prompt) >= self.input_token_limit:
-            print("Input window is full, please enter a shorter text.")
+            self.exceptions.append("Input window is full, please enter a shorter text.")
             return 1
+
+        chat_history = self.get_chat_history() + prompt
+
+        total_tokens = self.get_token_count(chat_history) + self.output_token_limit
+
+        if total_tokens >= self.context_window_limit:
+            self.exceptions.append(
+                "Context window is full, therefore you will lose some of your chat history."
+            )
+            return 0
+        elif total_tokens >= self.context_window_limit * 0.8:
+            self.exceptions.append(
+                "Input window is almost full. You might lose some of your chat history."
+            )
+            return 0
 
         return 0
 
     def _fix_exceptions(self, e):  # fixes unforseen exceptions
 
         if not hasattr(e, "code"):
-            print(f"An error occurred: {e}")
+            self.exceptions.append(f"An error occurred: {e}")
             return 1  # failsafe
 
         if self.waiting_time == 0:
             current_time = int(self._get_time() % 60)
             self.waiting_time = current_time
+
         else:
             current_time = 60 - self.waiting_time
             self.waiting_time = 0
 
-        if e.code == 429:
-            print(
+        if e.code == 429:  # tpm or rpm
+            self.exceptions.append(
                 f"Resource exhausted, please wait {60 - current_time} seconds to continue"
             )
-            time.sleep(60 - current_time)
+
+            # time.sleep(60 - current_time)
             return 0  # retry the function
+        elif e.code == 400:
+            self.exceptions.append(f"Bad request: {e}")
+            return 1  # failsafe
+        elif e.code == 503:
+            self.exceptions.append(f"Service unavailable: {e}")
+            return 1
         else:
-            print(f"An error occurred: {e}")
+            self.exceptions.append(f"An error occurred: {e}")
             return 1  # failsafe
 
-    def _query_database(self, query, try_count):  # query database
+    def _query_database(self, query, debug_mode, try_count):  # query database
 
-        conn = sqlite3.connect(self.database,uri=True)
+        conn = sqlite3.connect(self.database, uri=True)
         cursor = conn.cursor()
 
         try:
@@ -133,70 +160,73 @@ class Chatbot:
 
         except Exception as e:
             if try_count == 3:
-                print("Can not query the database based on the given prompt: ", e)
+                self.exceptions.append(
+                    "Can not query the database based on the given prompt: ", e
+                )
                 return ""
-            # self.query(
-            #     "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
-            #     try_count + 1,
-            # )
-            print("Can not query the database based on the given prompt YET: ", e)
+            self.query(
+                "you have made this error: {e} \n provide the correct query",  # retry the query, providing the error
+                debug_mode,
+                try_count + 1,
+            )
             return ""
 
         finally:
             # Close the connection
             conn.close()
 
-    def query(self, prompt, debug_mode):  # query function (unused)
+    def query(self, prompt, debug_mode, try_count=0):  # query function (unused)
         if self._check_for_exceptions(prompt) == 1:  # check for exceptions
-            return
+            return ""
 
         if self.start_time == 0:
             self._start_timer()
 
+        message = ""
         try:
             response = self.chat.send_message(prompt)
 
             response_dict = json.loads(response.text)
 
-            response_str = "\n".join(
-                [f"{key}: {value}" for key, value in response_dict.items()]
-            )
-
-            message = ""
             if debug_mode is True:
                 message = response.text
             message = message + "\n" + response_dict["message"]
 
             if response_dict["schema"] == "":
+                self.exceptions.append("Schema couldn't be created")
                 return message
 
             schema = json.loads(response_dict["schema"])
 
             if response_dict["certainty"] >= 0.8:
-                query_result = self._query_database(response_dict["sql"], 0)
+                query_result = self._query_database(
+                    response_dict["sql"], debug_mode, try_count
+                )
 
                 if query_result == "":
                     return message
                 if debug_mode is True:
                     message = message + "\n" + json.dumps(query_result, indent=4)
-                    
+
                 system_instruction = (
-                    "Do not use your memory from your pretraining process or the chat history."+ 
-                    "Only use the query output provided by the user"
+                    "Do not use your memory from your pretraining process or the chat history."
+                    + "Only use the query output provided by the user"
                     + " to provide necessary information"
                 )
 
                 inner_prompt = "".join([str(row) for row in query_result])
                 config = self.get_config(system_instruction, schema)
-                next_response = self.chat.send_message(inner_prompt,config)
+                next_response = self.chat.send_message(inner_prompt, config)
                 next_response_dict = json.loads(next_response.text)
                 message = message + "\n" + json.dumps(next_response_dict, indent=4)
             return message
 
         except Exception as e:
             if self._fix_exceptions(e) == 1:
-                print(f"An error occurred: {e}")
+                self.exceptions.append(f"An error occurred: {e}")
                 return ""
+
+            # return query(prompt)
 
     def get_config(self, instruction, schema):
         # Create configuration with system instruction
@@ -244,3 +274,9 @@ class Chatbot:
             config=config,
         )
         return chat
+
+    def get_chat_history(self):
+        history = self.chat.get_history()
+        if not history:
+            return ""
+        return "\n".join(str(item) for item in history)
